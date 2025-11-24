@@ -1,0 +1,28 @@
+{
+  "name": "flatflow-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlatFlow monorepo - Cross-platform app (Web + Android + iOS)",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "preview": "pnpm --filter web preview",
+    "lint": "pnpm --recursive lint",
+    "type-check": "pnpm --recursive type-check",
+    "clean": "pnpm --recursive clean && rm -rf node_modules",
+    "cap:sync": "cd apps/mobile-shell && npx cap sync",
+    "cap:android": "cd apps/mobile-shell && npx cap open android",
+    "cap:ios": "cd apps/mobile-shell && npx cap open ios",
+    "cap:build": "pnpm build && pnpm cap:sync"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}
+

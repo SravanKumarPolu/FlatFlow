@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing
+coverage/
+
+# Capacitor
+.capacitor/
+apps/mobile-shell/android/.gradle/
+apps/mobile-shell/android/build/
+apps/mobile-shell/android/.idea/
+apps/mobile-shell/android/local.properties
+apps/mobile-shell/ios/Pods/
+apps/mobile-shell/ios/.symlinks/
+apps/mobile-shell/ios/build/
+
+# Turbo
+.turbo/
+
+# Misc
+*.log
+.cache
+
