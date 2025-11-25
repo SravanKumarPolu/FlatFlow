@@ -77,7 +77,7 @@ export function ImpulseControlSettingsModal({
         <div className="modal-box max-w-2xl">
           <h3 className="font-bold text-lg mb-4">Impulse Control Settings</h3>
           <p className="text-sm text-base-content/60 mb-6">
-            Set spending limits to get nudged when you're about to exceed them.
+            Set spending limits to get nudged when you&apos;re about to exceed them.
           </p>
 
           <div className="space-y-6">

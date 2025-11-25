@@ -1,5 +1,4 @@
 import { useBillPaymentsStore } from "../stores/billPaymentsStore";
-import { BillPayment } from "@flatflow/core";
 
 export function useBillPayments() {
   const store = useBillPaymentsStore();

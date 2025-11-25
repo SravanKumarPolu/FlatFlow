@@ -272,3 +272,6 @@ VITE_SUPABASE_ANON_KEY=your-supabase-key
 
 For questions or issues, please open an issue on the repository.
 
+
+
+

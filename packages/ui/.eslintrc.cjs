@@ -1,4 +1,7 @@
 module.exports = {
-  extends: ["@flatflow/config/eslint/react.js"],
+  extends: ["../config/eslint/react.js"],
 };
+
+
+
 

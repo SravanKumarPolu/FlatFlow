@@ -11,7 +11,7 @@ interface GuestsState {
   getGuestsByFlatId: (flatId: string) => Guest[];
   getActiveGuestsByFlatId: (flatId: string) => Guest[]; // Guests currently staying
   getGuestStayDuration: (guestId: string) => number; // Returns days
-  checkOutGuest: (guestId: string, checkOutDate?: string) => void;
+  checkOutGuest: (guestId: string, checkOutDate?: string, notes?: string) => void;
   resetGuests: () => void;
 }
 
@@ -81,9 +81,18 @@ export const useGuestsStore = create<GuestsState>()(
         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       },
 
-      checkOutGuest: (guestId, checkOutDate) => {
+      checkOutGuest: (guestId, checkOutDate, notes?) => {
         const checkout = checkOutDate || new Date().toISOString();
-        get().updateGuest(guestId, { checkOutDate: checkout });
+        const guest = get().getGuest(guestId);
+        const updates: Partial<Guest> = { checkOutDate: checkout };
+        if (notes) {
+          // Append checkout notes to existing notes if any
+          const existingNotes = guest?.notes || "";
+          updates.notes = existingNotes
+            ? `${existingNotes}\n[Check-out: ${new Date(checkout).toLocaleDateString("en-IN")}] ${notes}`
+            : `[Check-out: ${new Date(checkout).toLocaleDateString("en-IN")}] ${notes}`;
+        }
+        get().updateGuest(guestId, updates);
       },
 
       resetGuests: () => {

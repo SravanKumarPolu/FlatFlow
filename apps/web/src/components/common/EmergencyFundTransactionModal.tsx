@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Input } from "@flatflow/ui";
@@ -27,6 +27,14 @@ export function EmergencyFundTransactionModal({
 
   const flatMembers = members.filter((m) => m.flatId === currentFlatId && m.isActive);
   const fund = currentFlatId ? getFundByFlatId(currentFlatId) : undefined;
+  
+  // Calculate current balance from transactions (derived)
+  const currentBalance = useMemo(() => {
+    if (!fund) return 0;
+    return fund.transactions.reduce((sum, t) => {
+      return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+    }, 0);
+  }, [fund]);
 
   const {
     register,
@@ -38,6 +46,7 @@ export function EmergencyFundTransactionModal({
     defaultValues: {
       memberId: "",
       amount: 0,
+      date: new Date().toISOString().split("T")[0],
       description: "",
     },
   });
@@ -47,6 +56,7 @@ export function EmergencyFundTransactionModal({
       reset({
         memberId: flatMembers.length > 0 ? flatMembers[0].id : "",
         amount: 0,
+        date: new Date().toISOString().split("T")[0],
         description: "",
       });
     }
@@ -58,16 +68,21 @@ export function EmergencyFundTransactionModal({
     }
 
     try {
+      const transactionDate = data.date
+        ? new Date(data.date).toISOString()
+        : undefined;
+
       if (type === "CONTRIBUTION") {
         addContribution(
           currentFlatId,
           data.memberId,
           data.amount,
-          data.description || undefined
+          data.description || undefined,
+          transactionDate
         );
         success(`Contribution of ₹${data.amount} added successfully`);
       } else {
-        if (fund && fund.balance < data.amount) {
+        if (currentBalance < data.amount) {
           error("Insufficient funds in emergency fund");
           return;
         }
@@ -75,7 +90,8 @@ export function EmergencyFundTransactionModal({
           currentFlatId,
           data.memberId,
           data.amount,
-          data.description || undefined
+          data.description || undefined,
+          transactionDate
         );
         success(`Withdrawal of ₹${data.amount} recorded successfully`);
       }
@@ -108,7 +124,7 @@ export function EmergencyFundTransactionModal({
             {type === "CONTRIBUTION" ? "Add Contribution" : "Record Withdrawal"}
           </h3>
 
-          {type === "WITHDRAWAL" && fund && (
+          {type === "WITHDRAWAL" && (
             <div className="alert alert-info mb-4">
               <div>
                 <div className="font-bold">Available Balance</div>
@@ -116,7 +132,7 @@ export function EmergencyFundTransactionModal({
                   {new Intl.NumberFormat("en-IN", {
                     style: "currency",
                     currency: "INR",
-                  }).format(fund.balance)}
+                  }).format(currentBalance)}
                 </div>
               </div>
             </div>
@@ -147,15 +163,24 @@ export function EmergencyFundTransactionModal({
               )}
             </div>
 
-            <Input
-              label="Amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              {...register("amount", { valueAsNumber: true })}
-              error={errors.amount?.message}
-              placeholder="0.00"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                {...register("amount", { valueAsNumber: true })}
+                error={errors.amount?.message}
+                placeholder="0.00"
+              />
+
+              <Input
+                label="Date"
+                type="date"
+                {...register("date")}
+                error={errors.date?.message}
+              />
+            </div>
 
             <div className="form-control">
               <label className="label">

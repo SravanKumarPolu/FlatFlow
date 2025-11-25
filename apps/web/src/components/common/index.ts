@@ -21,7 +21,12 @@ export { EditPaymentModal } from "./EditPaymentModal";
 export { BalanceBreakdown } from "./BalanceBreakdown";
 export { ErrorBoundary } from "./ErrorBoundary";
 export { AddChoreModal } from "./AddChoreModal";
+export { CompleteChoreModal } from "./CompleteChoreModal";
+export { ChoreCompletionHistoryModal } from "./ChoreCompletionHistoryModal";
 export { AddGuestModal } from "./AddGuestModal";
+export { CheckOutGuestModal } from "./CheckOutGuestModal";
+export { GuestDetailModal } from "./GuestDetailModal";
 export { EmergencyFundTransactionModal } from "./EmergencyFundTransactionModal";
+export { EditFundNameModal } from "./EditFundNameModal";
 export { ImpulseControlSettingsModal } from "./ImpulseControlSettingsModal";
 

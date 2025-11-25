@@ -113,13 +113,25 @@ export interface ChoreCompletion {
   createdAt: string;
 }
 
+export type GuestType = "SHARING" | "SINGLE" | "SHORT_STAY" | "STAFF" | "OTHER";
+export type IDProofType = "AADHAAR" | "PAN" | "DRIVING_LICENSE" | "PASSPORT" | "OTHER";
+export type PaymentStatus = "PENDING" | "PAID" | "PARTIAL" | "WAIVED";
+
 export interface Guest {
   id: string;
   flatId: string;
   name: string;
+  phone?: string;
+  email?: string;
+  idProofType?: IDProofType;
+  idProofNumber?: string;
+  guestType: GuestType;
   hostMemberId: string; // Member who is hosting the guest
+  roomBed?: string; // e.g., "Room 1 - Bed A"
   checkInDate: string; // ISO date
+  expectedCheckOutDate?: string; // ISO date (optional expected checkout)
   checkOutDate?: string; // ISO date (null if still staying)
+  paymentStatus?: PaymentStatus;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -139,7 +151,8 @@ export interface EmergencyFundTransaction {
 export interface EmergencyFund {
   id: string;
   flatId: string;
-  balance: number; // Current balance
+  name?: string; // Optional name/label for the fund
+  balance: number; // Current balance (derived from transactions, but cached for performance)
   transactions: EmergencyFundTransaction[];
   createdAt: string;
   updatedAt: string;

@@ -2,7 +2,9 @@ import { useState, useMemo } from "react";
 import {
   PageHeader,
   AddChoreModal,
+  CompleteChoreModal,
   ConfirmDeleteModal,
+  ChoreCompletionHistoryModal,
 } from "../../components/common";
 import { EmptyState } from "../../components/common/EmptyState";
 import { Button } from "@flatflow/ui";
@@ -23,6 +25,8 @@ export default function ChoresPage() {
     isOpen: boolean;
     chore: Chore | null;
   }>({ isOpen: false, chore: null });
+  const [historyChore, setHistoryChore] = useState<Chore | null>(null);
+  const [completingChore, setCompletingChore] = useState<Chore | null>(null);
 
   // Filter chores for current flat
   const flatChores = useMemo(() => {
@@ -56,8 +60,7 @@ export default function ChoresPage() {
 
   const handleComplete = (chore: Chore) => {
     if (!chore.currentAssigneeId) return;
-    completeChore(chore.id, chore.currentAssigneeId);
-    success(`Chore "${chore.name}" marked as complete!`);
+    setCompletingChore(chore);
   };
 
   const handleRotate = (chore: Chore) => {
@@ -208,6 +211,13 @@ export default function ChoresPage() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      onClick={() => setHistoryChore(chore)}
+                    >
+                      View History
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       onClick={() => {
                         setEditingChore(chore);
                         setIsModalOpen(true);
@@ -252,6 +262,20 @@ export default function ChoresPage() {
         title="Delete Chore"
         message={`Are you sure you want to delete "${deleteConfirm.chore?.name}"?`}
         itemName={deleteConfirm.chore?.name}
+      />
+
+      {historyChore && (
+        <ChoreCompletionHistoryModal
+          isOpen={!!historyChore}
+          onClose={() => setHistoryChore(null)}
+          chore={historyChore}
+        />
+      )}
+
+      <CompleteChoreModal
+        isOpen={!!completingChore}
+        onClose={() => setCompletingChore(null)}
+        chore={completingChore}
       />
     </>
   );

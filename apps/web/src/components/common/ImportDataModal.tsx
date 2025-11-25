@@ -10,7 +10,7 @@ interface ImportDataModalProps {
 
 export function ImportDataModal({ isOpen, onClose }: ImportDataModalProps) {
   const { success, error } = useToast();
-  const [file, setFile] = useState<File | null>(null);
+  const [_file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<ExportedData | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);

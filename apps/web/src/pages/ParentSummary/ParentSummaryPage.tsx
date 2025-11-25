@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { PageHeader } from "../../components/common/PageHeader";
+import { NoFlatBanner } from "../../components/common/NoFlatBanner";
 import { Button } from "@flatflow/ui";
 import {
   useExpenses,
@@ -8,15 +9,27 @@ import {
   useFlat,
   useBillPayments,
 } from "../../hooks";
-import { exportData, downloadExportedData } from "../../lib/dataExport";
+
+interface CategoryBreakdown {
+  category: string;
+  amount: number;
+  percentage: number;
+  expenses: number;
+  bills: number;
+}
 
 export default function ParentSummaryPage() {
   const { expenses, getExpensesByFlatId } = useExpenses();
   const { bills, getBillsByFlatId } = useBills();
   const { members } = useMembers();
   const { getCurrentFlatId } = useFlat();
-  const { payments: billPayments } = useBillPayments();
+  const { getPaymentsByFlatId } = useBillPayments();
   const currentFlatId = getCurrentFlatId();
+
+  // Month/year selector state
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
 
   const flatExpenses = useMemo(() => {
     if (!currentFlatId) return [];
@@ -33,18 +46,37 @@ export default function ParentSummaryPage() {
     return members.filter((m) => m.flatId === currentFlatId);
   }, [members, currentFlatId]);
 
-  // Get current month's data
-  const currentMonthData = useMemo(() => {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const flatBillPayments = useMemo(() => {
+    if (!currentFlatId) return [];
+    return getPaymentsByFlatId(currentFlatId);
+  }, [currentFlatId, getPaymentsByFlatId]);
+
+  const getMemberName = useCallback(
+    (memberId: string) => {
+      const member = flatMembers.find((m) => m.id === memberId);
+      return member ? member.name : `Member ${memberId.slice(-4)}`;
+    },
+    [flatMembers]
+  );
+
+  // Get selected month's data
+  const monthData = useMemo(() => {
+    const startOfMonth = new Date(selectedYear, selectedMonth, 1);
+    const endOfMonth = new Date(
+      selectedYear,
+      selectedMonth + 1,
+      0,
+      23,
+      59,
+      59
+    );
 
     const monthExpenses = flatExpenses.filter((exp) => {
       const expDate = new Date(exp.date);
       return expDate >= startOfMonth && expDate <= endOfMonth;
     });
 
-    const monthBillPayments = billPayments.filter((payment) => {
+    const monthBillPayments = flatBillPayments.filter((payment) => {
       const paymentDate = new Date(payment.paidDate);
       return paymentDate >= startOfMonth && paymentDate <= endOfMonth;
     });
@@ -53,79 +85,218 @@ export default function ParentSummaryPage() {
     const totalBills = monthBillPayments.reduce((sum, p) => sum + p.amount, 0);
     const totalSpending = totalExpenses + totalBills;
 
-    // Category breakdown
-    const categoryBreakdown: Record<string, number> = {};
+    // Category breakdown with type separation
+    const categoryMap: Record<
+      string,
+      { total: number; expenses: number; bills: number }
+    > = {};
+
+    // Add expenses to category breakdown
     monthExpenses.forEach((exp) => {
-      categoryBreakdown[exp.category] =
-        (categoryBreakdown[exp.category] || 0) + exp.amount;
+      if (!categoryMap[exp.category]) {
+        categoryMap[exp.category] = { total: 0, expenses: 0, bills: 0 };
+      }
+      categoryMap[exp.category].total += exp.amount;
+      categoryMap[exp.category].expenses += exp.amount;
     });
 
-    // Bill category breakdown
+    // Add bill payments to category breakdown
     monthBillPayments.forEach((payment) => {
       const bill = flatBills.find((b) => b.id === payment.billId);
       if (bill) {
-        categoryBreakdown[bill.category] =
-          (categoryBreakdown[bill.category] || 0) + payment.amount;
+        if (!categoryMap[bill.category]) {
+          categoryMap[bill.category] = { total: 0, expenses: 0, bills: 0 };
+        }
+        categoryMap[bill.category].total += payment.amount;
+        categoryMap[bill.category].bills += payment.amount;
       }
     });
 
-    return {
-      month: now.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
-      totalSpending,
-      totalExpenses,
-      totalBills,
-      categoryBreakdown,
-      expenses: monthExpenses,
-      billPayments: monthBillPayments,
-    };
-  }, [flatExpenses, flatBills, billPayments]);
+    // Convert to array with percentages
+    const categoryBreakdown: CategoryBreakdown[] = Object.entries(categoryMap)
+      .map(([category, data]) => ({
+        category,
+        amount: data.total,
+        percentage:
+          totalSpending > 0 ? (data.total / totalSpending) * 100 : 0,
+        expenses: data.expenses,
+        bills: data.bills,
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
-  const getMemberName = (memberId: string) => {
-    const member = flatMembers.find((m) => m.id === memberId);
-    return member ? member.name : `Member ${memberId.slice(-4)}`;
-  };
+    // Get top 3 categories
+    const topCategories = categoryBreakdown.slice(0, 3);
 
-  const handleExportPDF = () => {
-    // For now, export as JSON. PDF export would require a library like jsPDF
-    const summary = {
-      month: currentMonthData.month,
-      totalSpending: currentMonthData.totalSpending,
-      breakdown: currentMonthData.categoryBreakdown,
-      expenses: currentMonthData.expenses.map((exp) => ({
+    // Get largest single transactions (combine expenses and bill payments)
+    const allTransactions = [
+      ...monthExpenses.map((exp) => ({
+        id: exp.id,
+        type: "EXPENSE" as const,
         description: exp.description,
         amount: exp.amount,
         date: exp.date,
         category: exp.category,
-        paidBy: getMemberName(exp.paidByMemberId),
+        paidByMemberId: exp.paidByMemberId,
       })),
-      bills: currentMonthData.billPayments.map((payment) => {
+      ...monthBillPayments.map((payment) => {
         const bill = flatBills.find((b) => b.id === payment.billId);
         return {
-          name: bill?.name || "Unknown Bill",
+          id: payment.id,
+          type: "BILL_PAYMENT" as const,
+          description: bill?.name || "Unknown Bill",
           amount: payment.amount,
           date: payment.paidDate,
-          paidBy: getMemberName(payment.paidByMemberId),
+          category: bill?.category || "OTHER",
+          paidByMemberId: payment.paidByMemberId,
         };
       }),
+    ].sort((a, b) => b.amount - a.amount);
+
+    // Get top 3 largest transactions
+    const largestTransactions = allTransactions.slice(0, 3);
+
+    return {
+      month: new Date(selectedYear, selectedMonth).toLocaleDateString("en-IN", {
+        month: "long",
+        year: "numeric",
+      }),
+      monthKey: `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`,
+      totalSpending,
+      totalExpenses,
+      totalBills,
+      categoryBreakdown,
+      topCategories,
+      largestTransactions,
+      expenses: monthExpenses,
+      billPayments: monthBillPayments,
+    };
+  }, [
+    flatExpenses,
+    flatBills,
+    flatBillPayments,
+    selectedYear,
+    selectedMonth,
+  ]);
+
+  // Generate month options (last 12 months)
+  const monthOptions = useMemo(() => {
+    const options: { year: number; month: number; label: string }[] = [];
+    const currentDate = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      options.push({
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        label: date.toLocaleDateString("en-IN", {
+          month: "long",
+          year: "numeric",
+        }),
+      });
+    }
+    return options;
+  }, []);
+
+  const handleExport = () => {
+    const exportData = {
+      summary: {
+        month: monthData.month,
+        monthKey: monthData.monthKey,
+        totalSpending: monthData.totalSpending,
+        totalExpenses: monthData.totalExpenses,
+        totalBills: monthData.totalBills,
+      },
+      categoryBreakdown: monthData.categoryBreakdown.map((cat) => ({
+        category: cat.category,
+        amount: cat.amount,
+        percentage: cat.percentage,
+        expenses: cat.expenses,
+        bills: cat.bills,
+      })),
+      topCategories: monthData.topCategories.map((cat) => ({
+        category: cat.category,
+        amount: cat.amount,
+        percentage: cat.percentage,
+      })),
+      largestTransactions: monthData.largestTransactions.map((txn) => ({
+        id: txn.id,
+        type: txn.type,
+        description: txn.description,
+        amount: txn.amount,
+        date: txn.date,
+        category: txn.category,
+        paidBy: getMemberName(txn.paidByMemberId),
+        paidByMemberId: txn.paidByMemberId,
+      })),
+      transactions: {
+        expenses: monthData.expenses.map((exp) => ({
+          id: exp.id,
+          type: "EXPENSE",
+          description: exp.description,
+          amount: exp.amount,
+          date: exp.date,
+          category: exp.category,
+          paidBy: getMemberName(exp.paidByMemberId),
+          paidByMemberId: exp.paidByMemberId,
+        })),
+        billPayments: monthData.billPayments.map((payment) => {
+          const bill = flatBills.find((b) => b.id === payment.billId);
+          return {
+            id: payment.id,
+            type: "BILL_PAYMENT",
+            billName: bill?.name || "Unknown Bill",
+            billId: payment.billId,
+            amount: payment.amount,
+            date: payment.paidDate,
+            category: bill?.category || "OTHER",
+            paidBy: getMemberName(payment.paidByMemberId),
+            paidByMemberId: payment.paidByMemberId,
+            note: payment.note,
+          };
+        }),
+      },
     };
 
-    const dataStr = JSON.stringify(summary, null, 2);
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `parent-summary-${currentMonthData.month.toLowerCase().replace(/\s+/g, "-")}.json`;
+    link.download = `parent-summary-${monthData.monthKey}.json`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const getCategoryColor = (category: string) => {
+    const colors: Record<string, string> = {
+      RENT: "bg-primary",
+      UTILITY: "bg-secondary",
+      FOOD: "bg-accent",
+      GROCERY: "bg-info",
+      TRAVEL: "bg-warning",
+      SWIGGY: "bg-success",
+      OLA_UBER: "bg-error",
+      MAID: "bg-base-300",
+      OTHER: "bg-base-200",
+    };
+    return colors[category] || "bg-base-200";
   };
 
   return (
     <>
       <PageHeader
         title="Parent Summary"
-        subtitle={`Monthly spending report for ${currentMonthData.month}`}
+        subtitle="Monthly spending report"
         actions={
-          <Button variant="primary" onClick={handleExportPDF}>
+          <Button
+            variant="primary"
+            onClick={handleExport}
+            disabled={monthData.totalSpending === 0}
+            title={
+              monthData.totalSpending === 0
+                ? "No data to export"
+                : "Export monthly summary as JSON"
+            }
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 mr-2"
@@ -145,200 +316,349 @@ export default function ParentSummaryPage() {
         }
       />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="card bg-base-100 shadow-sm">
-          <div className="card-body">
-            <div className="stat">
+      <NoFlatBanner />
+
+      {/* Month Selector */}
+      <div className="card bg-base-100 shadow-sm mb-6">
+        <div className="card-body">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <label className="label">
+              <span className="label-text font-semibold">Select Month:</span>
+            </label>
+            <select
+              className="select select-bordered w-full sm:w-auto"
+              value={`${selectedYear}-${selectedMonth}`}
+              onChange={(e) => {
+                const [year, month] = e.target.value.split("-").map(Number);
+                setSelectedYear(year);
+                setSelectedMonth(month);
+              }}
+            >
+              {monthOptions.map((option) => (
+                <option
+                  key={`${option.year}-${option.month}`}
+                  value={`${option.year}-${option.month}`}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* This Month's Summary */}
+      <div className="card bg-base-100 shadow-sm mb-6">
+        <div className="card-body">
+          <h2 className="card-title text-xl mb-4">
+            {monthData.month}'s Summary
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="stat bg-base-200 rounded-lg p-4">
               <div className="stat-title">Total Spending</div>
               <div className="stat-value text-3xl">
                 {new Intl.NumberFormat("en-IN", {
                   style: "currency",
                   currency: "INR",
                   maximumFractionDigits: 0,
-                }).format(currentMonthData.totalSpending)}
+                }).format(monthData.totalSpending)}
               </div>
-              <div className="stat-desc">{currentMonthData.month}</div>
+              <div className="stat-desc">{monthData.month}</div>
             </div>
-          </div>
-        </div>
 
-        <div className="card bg-base-100 shadow-sm">
-          <div className="card-body">
-            <div className="stat">
+            <div className="stat bg-primary/10 rounded-lg p-4">
               <div className="stat-title">Expenses</div>
               <div className="stat-value text-3xl text-primary">
                 {new Intl.NumberFormat("en-IN", {
                   style: "currency",
                   currency: "INR",
                   maximumFractionDigits: 0,
-                }).format(currentMonthData.totalExpenses)}
+                }).format(monthData.totalExpenses)}
               </div>
               <div className="stat-desc">
-                {currentMonthData.expenses.length} transactions
+                {monthData.expenses.length} transactions
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="card bg-base-100 shadow-sm">
-          <div className="card-body">
-            <div className="stat">
+            <div className="stat bg-secondary/10 rounded-lg p-4">
               <div className="stat-title">Bills</div>
               <div className="stat-value text-3xl text-secondary">
                 {new Intl.NumberFormat("en-IN", {
                   style: "currency",
                   currency: "INR",
                   maximumFractionDigits: 0,
-                }).format(currentMonthData.totalBills)}
+                }).format(monthData.totalBills)}
               </div>
               <div className="stat-desc">
-                {currentMonthData.billPayments.length} payments
+                {monthData.billPayments.length} payments
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Category Breakdown */}
-      <div className="card bg-base-100 shadow-sm mb-6">
-        <div className="card-body">
-          <h2 className="card-title text-lg mb-4">Category Breakdown</h2>
-          <div className="space-y-2">
-            {Object.entries(currentMonthData.categoryBreakdown)
-              .sort(([, a], [, b]) => b - a)
-              .map(([category, amount]) => (
-                <div key={category} className="flex items-center justify-between">
-                  <span className="font-medium">{category}</span>
-                  <span className="font-bold">
-                    {new Intl.NumberFormat("en-IN", {
-                      style: "currency",
-                      currency: "INR",
-                    }).format(amount)}
-                  </span>
-                </div>
-              ))}
-            {Object.keys(currentMonthData.categoryBreakdown).length === 0 && (
-              <p className="text-base-content/60 text-center py-4">
-                No spending this month
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Expenses */}
-      <div className="card bg-base-100 shadow-sm mb-6">
-        <div className="card-body">
-          <h2 className="card-title text-lg mb-4">Recent Expenses</h2>
-          {currentMonthData.expenses.length === 0 ? (
-            <p className="text-base-content/60 text-center py-4">
-              No expenses this month
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table w-full">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Paid By</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentMonthData.expenses
-                    .sort(
-                      (a, b) =>
-                        new Date(b.date).getTime() - new Date(a.date).getTime()
-                    )
-                    .map((expense) => (
-                      <tr key={expense.id}>
-                        <td>
-                          {new Date(expense.date).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                          })}
-                        </td>
-                        <td className="font-medium">{expense.description}</td>
-                        <td>
-                          <span className="badge badge-outline badge-sm">
-                            {expense.category}
-                          </span>
-                        </td>
-                        <td>{getMemberName(expense.paidByMemberId)}</td>
-                        <td className="font-bold">
+      {/* Top Highlights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Top 3 Categories */}
+        {monthData.topCategories.length > 0 && (
+          <div className="card bg-base-100 shadow-sm">
+            <div className="card-body">
+              <h2 className="card-title text-lg mb-4">Top 3 Categories</h2>
+              <div className="space-y-3">
+                {monthData.topCategories.map((cat, index) => (
+                  <div key={cat.category} className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-semibold">{cat.category}</span>
+                        <span className="font-bold">
                           {new Intl.NumberFormat("en-IN", {
                             style: "currency",
                             currency: "INR",
-                          }).format(expense.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+                          }).format(cat.amount)}
+                        </span>
+                      </div>
+                      <div className="w-full bg-base-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${getCategoryColor(cat.category)}`}
+                          style={{ width: `${cat.percentage}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-base-content/60 mt-1">
+                        {cat.percentage.toFixed(1)}% of total spending
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Largest Single Transactions */}
+        {monthData.largestTransactions.length > 0 && (
+          <div className="card bg-base-100 shadow-sm">
+            <div className="card-body">
+              <h2 className="card-title text-lg mb-4">
+                Largest Single Transactions
+              </h2>
+              <div className="space-y-3">
+                {monthData.largestTransactions.map((txn, index) => (
+                  <div key={txn.id} className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center font-bold text-secondary">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <div>
+                          <div className="font-semibold">{txn.description}</div>
+                          <div className="text-xs text-base-content/60">
+                            {new Date(txn.date).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                            })}{" "}
+                            • {txn.type === "EXPENSE" ? "Expense" : "Bill Payment"}
+                          </div>
+                        </div>
+                        <span className="font-bold text-lg">
+                          {new Intl.NumberFormat("en-IN", {
+                            style: "currency",
+                            currency: "INR",
+                          }).format(txn.amount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="badge badge-outline badge-sm">
+                          {txn.category}
+                        </span>
+                        <span className="text-xs text-base-content/60">
+                          Paid by {getMemberName(txn.paidByMemberId)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* By Category */}
+      <div className="card bg-base-100 shadow-sm mb-6">
+        <div className="card-body">
+          <h2 className="card-title text-lg mb-4">By Category</h2>
+          {monthData.categoryBreakdown.length === 0 ? (
+            <p className="text-base-content/60 text-center py-4">
+              No spending in {monthData.month}
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {monthData.categoryBreakdown.map((cat) => (
+                <div key={cat.category}>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{cat.category}</span>
+                      <span className="badge badge-outline badge-sm">
+                        {cat.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold">
+                        {new Intl.NumberFormat("en-IN", {
+                          style: "currency",
+                          currency: "INR",
+                        }).format(cat.amount)}
+                      </div>
+                      <div className="text-xs text-base-content/60">
+                        {cat.expenses > 0 && (
+                          <span>Expenses: {cat.expenses.toFixed(0)}</span>
+                        )}
+                        {cat.expenses > 0 && cat.bills > 0 && " • "}
+                        {cat.bills > 0 && (
+                          <span>Bills: {cat.bills.toFixed(0)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-base-200 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full ${getCategoryColor(cat.category)}`}
+                      style={{ width: `${cat.percentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Bill Payments */}
-      <div className="card bg-base-100 shadow-sm">
-        <div className="card-body">
-          <h2 className="card-title text-lg mb-4">Bill Payments</h2>
-          {currentMonthData.billPayments.length === 0 ? (
-            <p className="text-base-content/60 text-center py-4">
-              No bill payments this month
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table w-full">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Bill</th>
-                    <th>Paid By</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentMonthData.billPayments
-                    .sort(
-                      (a, b) =>
-                        new Date(b.paidDate).getTime() -
-                        new Date(a.paidDate).getTime()
-                    )
-                    .map((payment) => {
-                      const bill = flatBills.find((b) => b.id === payment.billId);
-                      return (
-                        <tr key={payment.id}>
+      {/* Expenses & Bills */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Expenses */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body">
+            <h2 className="card-title text-lg mb-4">Expenses</h2>
+            {monthData.expenses.length === 0 ? (
+              <p className="text-base-content/60 text-center py-4">
+                No expenses in {monthData.month}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="table w-full table-sm">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthData.expenses
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime()
+                      )
+                      .map((expense) => (
+                        <tr key={expense.id}>
                           <td>
-                            {new Date(payment.paidDate).toLocaleDateString("en-IN", {
+                            {new Date(expense.date).toLocaleDateString("en-IN", {
                               day: "numeric",
                               month: "short",
                             })}
                           </td>
                           <td className="font-medium">
-                            {bill?.name || "Unknown Bill"}
+                            {expense.description}
                           </td>
-                          <td>{getMemberName(payment.paidByMemberId)}</td>
+                          <td>
+                            <span className="badge badge-outline badge-sm">
+                              {expense.category}
+                            </span>
+                          </td>
                           <td className="font-bold">
                             {new Intl.NumberFormat("en-IN", {
                               style: "currency",
                               currency: "INR",
-                            }).format(payment.amount)}
+                            }).format(expense.amount)}
                           </td>
                         </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bill Payments */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body">
+            <h2 className="card-title text-lg mb-4">Bill Payments</h2>
+            {monthData.billPayments.length === 0 ? (
+              <p className="text-base-content/60 text-center py-4">
+                No bill payments in {monthData.month}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="table w-full table-sm">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Bill</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthData.billPayments
+                      .sort(
+                        (a, b) =>
+                          new Date(b.paidDate).getTime() -
+                          new Date(a.paidDate).getTime()
+                      )
+                      .map((payment) => {
+                        const bill = flatBills.find(
+                          (b) => b.id === payment.billId
+                        );
+                        return (
+                          <tr key={payment.id}>
+                            <td>
+                              {new Date(
+                                payment.paidDate
+                              ).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                              })}
+                            </td>
+                            <td className="font-medium">
+                              {bill?.name || "Unknown Bill"}
+                            </td>
+                            <td>
+                              <span className="badge badge-outline badge-sm">
+                                {bill?.category || "OTHER"}
+                              </span>
+                            </td>
+                            <td className="font-bold">
+                              {new Intl.NumberFormat("en-IN", {
+                                style: "currency",
+                                currency: "INR",
+                              }).format(payment.amount)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
   );
 }
-

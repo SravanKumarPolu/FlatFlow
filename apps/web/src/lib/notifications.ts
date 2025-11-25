@@ -1,4 +1,4 @@
-import { Bill } from "@flatflow/core";
+import { Bill, Chore } from "@flatflow/core";
 import { getNextDueDate, getDaysUntilDue } from "./billUtils";
 
 export interface BillReminder {
@@ -70,6 +70,120 @@ export function checkAndShowBillReminders(
       body: message,
       tag: `bill-reminder-${reminder.billId}`, // Prevent duplicate notifications
       requireInteraction: reminder.daysUntilDue === 0, // Require interaction if due today
+    });
+  });
+}
+
+export interface ChoreReminder {
+  choreId: string;
+  choreName: string;
+  assignedToMemberId: string;
+  daysOverdue: number;
+  frequency: Chore["frequency"];
+}
+
+/**
+ * Get chores that need reminders (overdue chores)
+ */
+export function getChoresNeedingReminders(
+  chores: Chore[],
+  currentUserId?: string | null
+): ChoreReminder[] {
+  const now = new Date();
+  const reminders: ChoreReminder[] = [];
+
+  chores
+    .filter((chore) => chore.isActive && chore.currentAssigneeId)
+    .forEach((chore) => {
+      // Only show reminders for chores assigned to current user (if userId provided)
+      if (currentUserId && chore.currentAssigneeId !== currentUserId) {
+        return;
+      }
+
+      if (!chore.lastCompletedAt) {
+        // Chore never completed - check if it's overdue based on creation date
+        const createdDate = new Date(chore.createdAt);
+        const daysSinceCreation = Math.floor(
+          (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        const thresholdDays =
+          chore.frequency === "DAILY"
+            ? 1
+            : chore.frequency === "WEEKLY"
+            ? 7
+            : chore.frequency === "BIWEEKLY"
+            ? 14
+            : 30; // MONTHLY
+
+        if (daysSinceCreation >= thresholdDays) {
+          reminders.push({
+            choreId: chore.id,
+            choreName: chore.name,
+            assignedToMemberId: chore.currentAssigneeId,
+            daysOverdue: daysSinceCreation - thresholdDays + 1,
+            frequency: chore.frequency,
+          });
+        }
+      } else {
+        // Chore was completed before - check if overdue
+        const lastCompleted = new Date(chore.lastCompletedAt);
+        const daysSince = Math.floor(
+          (now.getTime() - lastCompleted.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        const thresholdDays =
+          chore.frequency === "DAILY"
+            ? 1
+            : chore.frequency === "WEEKLY"
+            ? 7
+            : chore.frequency === "BIWEEKLY"
+            ? 14
+            : 30; // MONTHLY
+
+        if (daysSince >= thresholdDays) {
+          reminders.push({
+            choreId: chore.id,
+            choreName: chore.name,
+            assignedToMemberId: chore.currentAssigneeId,
+            daysOverdue: daysSince - thresholdDays + 1,
+            frequency: chore.frequency,
+          });
+        }
+      }
+    });
+
+  return reminders.sort((a, b) => b.daysOverdue - a.daysOverdue);
+}
+
+/**
+ * Format chore reminder message
+ */
+export function formatChoreReminderMessage(reminder: ChoreReminder): string {
+  const daysText =
+    reminder.daysOverdue === 1
+      ? "1 day overdue"
+      : `${reminder.daysOverdue} days overdue`;
+
+  return `${reminder.choreName} is ${daysText} (${reminder.frequency})`;
+}
+
+/**
+ * Check and show chore reminders
+ */
+export function checkAndShowChoreReminders(
+  chores: Chore[],
+  showNotification: (title: string, options?: NotificationOptions) => Notification | null,
+  currentUserId?: string | null
+): void {
+  const reminders = getChoresNeedingReminders(chores, currentUserId);
+
+  reminders.forEach((reminder) => {
+    const message = formatChoreReminderMessage(reminder);
+    showNotification("Chore Reminder", {
+      body: message,
+      tag: `chore-reminder-${reminder.choreId}`, // Prevent duplicate notifications
+      requireInteraction: true, // Always require interaction for overdue chores
     });
   });
 }

@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@flatflow/ui";
-import { Bill, BillPayment } from "@flatflow/core";
+import { Bill } from "@flatflow/core";
 import { useBillPayments, useMembers, useFlat, useToast } from "../../hooks";
 
 const markBillPaidSchema = z.object({

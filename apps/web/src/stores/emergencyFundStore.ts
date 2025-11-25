@@ -8,14 +8,19 @@ interface EmergencyFundState {
     flatId: string,
     memberId: string,
     amount: number,
-    description?: string
+    description?: string,
+    date?: string
   ) => void;
   addWithdrawal: (
     flatId: string,
     memberId: string,
     amount: number,
-    description?: string
+    description?: string,
+    date?: string
   ) => void;
+  updateFundName: (flatId: string, name?: string) => void;
+  deleteTransaction: (flatId: string, transactionId: string) => void;
+  recalculateBalance: (flatId: string) => void;
   getFundByFlatId: (flatId: string) => EmergencyFund | undefined;
   getTransactionsByFlatId: (flatId: string) => EmergencyFundTransaction[];
   resetFund: (flatId: string) => void;
@@ -31,15 +36,16 @@ export const useEmergencyFundStore = create<EmergencyFundState>()(
     (set, get) => ({
       funds: [],
 
-      addContribution: (flatId, memberId, amount, description) => {
+      addContribution: (flatId, memberId, amount, description, date) => {
         const now = new Date().toISOString();
+        const transactionDate = date || now;
         const transaction: EmergencyFundTransaction = {
           id: generateTransactionId(),
           flatId,
           type: "CONTRIBUTION",
           memberId,
           amount,
-          date: now,
+          date: transactionDate,
           description,
           createdAt: now,
         };
@@ -50,7 +56,8 @@ export const useEmergencyFundStore = create<EmergencyFundState>()(
           fund = {
             id: generateId(),
             flatId,
-            balance: 0,
+            name: undefined,
+            balance: 0, // Will be recalculated
             transactions: [],
             createdAt: now,
             updatedAt: now,
@@ -60,11 +67,16 @@ export const useEmergencyFundStore = create<EmergencyFundState>()(
           }));
         }
 
-        // Add transaction and update balance
+        // Add transaction and recalculate balance from all transactions
+        const allTransactions = [...fund.transactions, transaction];
+        const newBalance = allTransactions.reduce((sum, t) => {
+          return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+        }, 0);
+
         const updatedFund: EmergencyFund = {
           ...fund,
-          balance: fund.balance + amount,
-          transactions: [...fund.transactions, transaction],
+          balance: newBalance, // Derived from transactions
+          transactions: allTransactions,
           updatedAt: now,
         };
 
@@ -73,28 +85,44 @@ export const useEmergencyFundStore = create<EmergencyFundState>()(
         }));
       },
 
-      addWithdrawal: (flatId, memberId, amount, description) => {
+      addWithdrawal: (flatId, memberId, amount, description, date) => {
         const fund = get().getFundByFlatId(flatId);
-        if (!fund || fund.balance < amount) {
+        if (!fund) {
+          throw new Error("Emergency fund not found");
+        }
+
+        // Calculate current balance from transactions
+        const currentBalance = fund.transactions.reduce((sum, t) => {
+          return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+        }, 0);
+
+        if (currentBalance < amount) {
           throw new Error("Insufficient funds");
         }
 
         const now = new Date().toISOString();
+        const transactionDate = date || now;
         const transaction: EmergencyFundTransaction = {
           id: generateTransactionId(),
           flatId,
           type: "WITHDRAWAL",
           memberId,
           amount,
-          date: now,
+          date: transactionDate,
           description,
           createdAt: now,
         };
 
+        // Recalculate balance from all transactions
+        const allTransactions = [...fund.transactions, transaction];
+        const newBalance = allTransactions.reduce((sum, t) => {
+          return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+        }, 0);
+
         const updatedFund: EmergencyFund = {
           ...fund,
-          balance: fund.balance - amount,
-          transactions: [...fund.transactions, transaction],
+          balance: newBalance, // Derived from transactions
+          transactions: allTransactions,
           updatedAt: now,
         };
 
@@ -113,6 +141,65 @@ export const useEmergencyFundStore = create<EmergencyFundState>()(
         return fund.transactions.sort(
           (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
+      },
+
+      updateFundName: (flatId, name) => {
+        const fund = get().getFundByFlatId(flatId);
+        if (!fund) return;
+
+        const updatedFund: EmergencyFund = {
+          ...fund,
+          name,
+          updatedAt: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          funds: state.funds.map((f) => (f.id === fund.id ? updatedFund : f)),
+        }));
+      },
+
+      deleteTransaction: (flatId, transactionId) => {
+        const fund = get().getFundByFlatId(flatId);
+        if (!fund) return;
+
+        const remainingTransactions = fund.transactions.filter(
+          (t) => t.id !== transactionId
+        );
+
+        // Recalculate balance from remaining transactions
+        const newBalance = remainingTransactions.reduce((sum, t) => {
+          return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+        }, 0);
+
+        const updatedFund: EmergencyFund = {
+          ...fund,
+          balance: newBalance,
+          transactions: remainingTransactions,
+          updatedAt: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          funds: state.funds.map((f) => (f.id === fund.id ? updatedFund : f)),
+        }));
+      },
+
+      recalculateBalance: (flatId) => {
+        const fund = get().getFundByFlatId(flatId);
+        if (!fund) return;
+
+        const newBalance = fund.transactions.reduce((sum, t) => {
+          return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+        }, 0);
+
+        const updatedFund: EmergencyFund = {
+          ...fund,
+          balance: newBalance,
+          updatedAt: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          funds: state.funds.map((f) => (f.id === fund.id ? updatedFund : f)),
+        }));
       },
 
       resetFund: (flatId) => {

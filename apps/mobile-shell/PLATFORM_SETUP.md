@@ -235,3 +235,6 @@ After platforms are added:
 
 **Status:** Platforms ready to add via `npx cap add android` and `npx cap add ios`
 
+
+
+

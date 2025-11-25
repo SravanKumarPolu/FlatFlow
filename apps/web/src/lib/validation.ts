@@ -80,11 +80,43 @@ export type ChoreFormData = z.infer<typeof choreFormSchema>;
 // Guest form schema
 export const guestFormSchema = z.object({
   name: z.string().min(1, "Guest name is required").trim(),
+  phone: z.string().optional().or(z.literal("")),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  idProofType: z.enum(["AADHAAR", "PAN", "DRIVING_LICENSE", "PASSPORT", "OTHER"]).optional(),
+  idProofNumber: z.string().optional().or(z.literal("")),
+  guestType: z.enum(["SHARING", "SINGLE", "SHORT_STAY", "STAFF", "OTHER"]),
   hostMemberId: z.string().min(1, "Please select host member"),
+  roomBed: z.string().optional().or(z.literal("")),
   checkInDate: z.string().min(1, "Check-in date is required"),
+  expectedCheckOutDate: z.string().optional().or(z.literal("")),
   checkOutDate: z.string().optional().or(z.literal("")),
+  paymentStatus: z.enum(["PENDING", "PAID", "PARTIAL", "WAIVED"]).optional(),
   notes: z.string().optional().or(z.literal("")),
-});
+})
+  .refine(
+    (data) => {
+      if (data.expectedCheckOutDate && data.checkInDate) {
+        return new Date(data.expectedCheckOutDate) >= new Date(data.checkInDate);
+      }
+      return true;
+    },
+    {
+      message: "Expected check-out date must be after check-in date",
+      path: ["expectedCheckOutDate"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.checkOutDate && data.checkInDate) {
+        return new Date(data.checkOutDate) >= new Date(data.checkInDate);
+      }
+      return true;
+    },
+    {
+      message: "Check-out date must be after check-in date",
+      path: ["checkOutDate"],
+    }
+  );
 
 export type GuestFormData = z.infer<typeof guestFormSchema>;
 
@@ -95,6 +127,7 @@ export const emergencyFundTransactionSchema = z.object({
     .number()
     .positive("Amount must be a positive number")
     .min(0.01, "Amount must be at least ₹0.01"),
+  date: z.string().optional().or(z.literal("")),
   description: z.string().optional().or(z.literal("")),
 });
 

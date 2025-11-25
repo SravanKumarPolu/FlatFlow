@@ -271,19 +271,75 @@ export function importData(data: ExportedData, options?: { merge?: boolean }): v
     useChoresStore.setState({ chores: data.chores });
   }
   if (data.choreCompletions && data.choreCompletions.length > 0) {
-    useChoresStore.setState((state) => ({
+    useChoresStore.setState(() => ({
       completions: data.choreCompletions!,
     }));
   }
 
   // Import guests (if available - new in v2.0.0)
   if (data.guests && data.guests.length > 0) {
-    useGuestsStore.setState({ guests: data.guests });
+    const guestsStore = useGuestsStore.getState();
+    if (merge) {
+      // Merge: add new guests, update existing ones
+      data.guests.forEach((guest) => {
+        const existing = guestsStore.getGuest(guest.id);
+        if (existing) {
+          guestsStore.updateGuest(guest.id, guest);
+        } else {
+          // For new guests, preserve the imported ID and timestamps
+          guestsStore.guests.push(guest);
+        }
+      });
+      // Update the store state
+      useGuestsStore.setState({ guests: guestsStore.guests });
+    } else {
+      // Replace: set all guests directly
+      useGuestsStore.setState({ guests: data.guests });
+    }
   }
 
   // Import emergency funds (if available - new in v2.0.0)
   if (data.emergencyFunds && data.emergencyFunds.length > 0) {
-    useEmergencyFundStore.setState({ funds: data.emergencyFunds });
+    const emergencyFundStore = useEmergencyFundStore.getState();
+    if (merge) {
+      // Merge: add new funds, update existing ones
+      data.emergencyFunds.forEach((fund) => {
+        const existing = emergencyFundStore.getFundByFlatId(fund.flatId);
+        if (existing) {
+          // Merge transactions and recalculate balance
+          const allTransactions = [
+            ...existing.transactions,
+            ...fund.transactions.filter(
+              (t) => !existing.transactions.find((et) => et.id === t.id)
+            ),
+          ];
+          const newBalance = allTransactions.reduce((sum, t) => {
+            return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+          }, 0);
+          emergencyFundStore.funds = emergencyFundStore.funds.map((f) =>
+            f.id === existing.id
+              ? { ...fund, transactions: allTransactions, balance: newBalance }
+              : f
+          );
+        } else {
+          // Recalculate balance for new fund
+          const newBalance = fund.transactions.reduce((sum, t) => {
+            return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+          }, 0);
+          emergencyFundStore.funds.push({ ...fund, balance: newBalance });
+        }
+      });
+      useEmergencyFundStore.setState({ funds: emergencyFundStore.funds });
+    } else {
+      // Replace: recalculate balances for all funds
+      const fundsWithRecalculatedBalance = data.emergencyFunds.map((fund) => {
+        const balance = fund.transactions.reduce((sum, t) => {
+          return t.type === "CONTRIBUTION" ? sum + t.amount : sum - t.amount;
+        }, 0);
+        return { ...fund, balance };
+      });
+      useEmergencyFundStore.setState({ funds: fundsWithRecalculatedBalance });
+    }
   }
 
   // Import impulse control limits (if available - new in v2.0.0)

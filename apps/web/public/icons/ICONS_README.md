@@ -77,3 +77,6 @@ In Xcode (after `npx cap add ios`):
 
 **TODO:** Replace placeholder assets with real app icons before store submission.
 
+
+
+

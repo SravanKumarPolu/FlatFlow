@@ -1,4 +1,7 @@
 module.exports = {
-  extends: ["@flatflow/config/eslint/base.js"],
+  extends: ["../config/eslint/base.js"],
 };
+
+
+
 

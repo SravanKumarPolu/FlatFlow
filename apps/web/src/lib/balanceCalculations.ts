@@ -17,7 +17,7 @@ export function calculateMemberBalances(
   settlements: Settlement[],
   billPayments: BillPayment[],
   members: Member[],
-  currentUserId: string
+  _currentUserId: string
 ): MemberBalance[] {
   const balances: Map<string, MemberBalance> = new Map();
 

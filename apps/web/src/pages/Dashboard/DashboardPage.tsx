@@ -11,9 +11,10 @@ import {
   useFlat,
   useBillPayments,
   useNotificationSettings,
+  useChores,
 } from "../../hooks";
 import { getNextDueDate, formatDueDate, getDaysUntilDue } from "../../lib/billUtils";
-import { checkAndShowBillReminders } from "../../lib/notifications";
+import { checkAndShowBillReminders, checkAndShowChoreReminders, getChoresNeedingReminders } from "../../lib/notifications";
 import { useEffect, useRef } from "react";
 
 export default function DashboardPage() {
@@ -26,8 +27,10 @@ export default function DashboardPage() {
   const { getLatestPaymentForBill, getPaymentsByBillId, payments: billPayments } = useBillPayments();
   const { enabled: notificationsEnabled, reminderDays, showNotification, canNotify } =
     useNotificationSettings();
+  const { getActiveChoresByFlatId } = useChores();
   const currentFlatId = getCurrentFlatId();
   const lastCheckRef = useRef<number>(0);
+  const lastChoreCheckRef = useRef<number>(0);
 
   // Filter data for current flat
   const flatBills = useMemo(() => {
@@ -58,6 +61,12 @@ export default function DashboardPage() {
       .map((item) => item.bill);
   }, [flatBills]);
 
+  // Get active chores for current flat
+  const flatChores = useMemo(() => {
+    if (!currentFlatId) return [];
+    return getActiveChoresByFlatId(currentFlatId);
+  }, [currentFlatId, getActiveChoresByFlatId]);
+
   // Check for bill reminders periodically (every 5 minutes)
   useEffect(() => {
     if (!notificationsEnabled || !canNotify || activeBills.length === 0) {
@@ -83,6 +92,38 @@ export default function DashboardPage() {
 
     return () => clearInterval(interval);
   }, [notificationsEnabled, canNotify, activeBills, reminderDays, showNotification]);
+
+  // Check for chore reminders periodically (every 10 minutes)
+  useEffect(() => {
+    if (!notificationsEnabled || !canNotify || flatChores.length === 0) {
+      return;
+    }
+
+    const checkChoreReminders = () => {
+      const now = Date.now();
+      // Only check once per 5 minutes to avoid spam
+      if (now - lastChoreCheckRef.current < 5 * 60 * 1000) {
+        return;
+      }
+      lastChoreCheckRef.current = now;
+
+      checkAndShowChoreReminders(flatChores, showNotification, currentMemberId);
+    };
+
+    // Check immediately on mount
+    checkChoreReminders();
+
+    // Then check every 10 minutes
+    const interval = setInterval(checkChoreReminders, 10 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [notificationsEnabled, canNotify, flatChores, showNotification, currentMemberId]);
+
+  // Get overdue chores for current user
+  const overdueChores = useMemo(() => {
+    if (!currentMemberId) return [];
+    return getChoresNeedingReminders(flatChores, currentMemberId);
+  }, [flatChores, currentMemberId]);
 
   // Get next bill due (first active bill)
   const nextBillDue = activeBills[0];
@@ -287,6 +328,88 @@ export default function DashboardPage() {
             members={flatMembers}
             currentUserId={currentUserId}
           />
+        </div>
+      )}
+
+      {/* Overdue Chores Alert */}
+      {overdueChores.length > 0 && (
+        <div className="card bg-warning/10 border-warning border-2 mb-6">
+          <div className="card-body">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">⚠️</span>
+              <h2 className="card-title text-lg">Overdue Chores</h2>
+            </div>
+            <div className="space-y-2">
+              {overdueChores.slice(0, 3).map((reminder) => {
+                const chore = flatChores.find((c) => c.id === reminder.choreId);
+                return (
+                  <div
+                    key={reminder.choreId}
+                    className="flex items-center justify-between p-2 rounded-lg bg-base-100"
+                  >
+                    <div>
+                      <p className="font-semibold">{reminder.choreName}</p>
+                      <p className="text-sm text-base-content/60">
+                        {reminder.daysOverdue} day{reminder.daysOverdue !== 1 ? "s" : ""} overdue • {reminder.frequency}
+                      </p>
+                    </div>
+                    <a
+                      href="/chores"
+                      className="btn btn-sm btn-warning"
+                    >
+                      View
+                    </a>
+                  </div>
+                );
+              })}
+              {overdueChores.length > 3 && (
+                <p className="text-sm text-base-content/60 text-center">
+                  +{overdueChores.length - 3} more overdue chore{overdueChores.length - 3 !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Overdue Chores Alert */}
+      {overdueChores.length > 0 && (
+        <div className="card bg-warning/10 border-warning border-2 mb-6">
+          <div className="card-body">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">⚠️</span>
+              <h2 className="card-title text-lg">Overdue Chores</h2>
+            </div>
+            <div className="space-y-2">
+              {overdueChores.slice(0, 3).map((reminder) => {
+                const chore = flatChores.find((c) => c.id === reminder.choreId);
+                return (
+                  <div
+                    key={reminder.choreId}
+                    className="flex items-center justify-between p-2 rounded-lg bg-base-100"
+                  >
+                    <div>
+                      <p className="font-semibold">{reminder.choreName}</p>
+                      <p className="text-sm text-base-content/60">
+                        {reminder.daysOverdue} day{reminder.daysOverdue !== 1 ? "s" : ""} overdue • {reminder.frequency}
+                      </p>
+                    </div>
+                    <a
+                      href="/chores"
+                      className="btn btn-sm btn-warning"
+                    >
+                      View
+                    </a>
+                  </div>
+                );
+              })}
+              {overdueChores.length > 3 && (
+                <p className="text-sm text-base-content/60 text-center">
+                  +{overdueChores.length - 3} more overdue chore{overdueChores.length - 3 !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

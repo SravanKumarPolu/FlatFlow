@@ -8,13 +8,15 @@ export interface GuestAdjustment {
 
 /**
  * Calculate fair adjustments for bills based on guest stays
+ * Supports pro-rated rent/utilities for mid-month move-in/out
  * If a member has a guest staying, they should pay a proportional share for rent/utilities
  */
 export function calculateGuestAdjustments(
   guests: Guest[],
   members: Member[],
   bills: Bill[],
-  flatId: string
+  flatId: string,
+  referenceDate?: Date // Optional: calculate for a specific date (defaults to today)
 ): GuestAdjustment[] {
   const adjustments: Map<string, GuestAdjustment> = new Map();
   const activeMembers = members.filter((m) => m.flatId === flatId && m.isActive);
@@ -22,10 +24,26 @@ export function calculateGuestAdjustments(
 
   if (memberCount === 0) return [];
 
-  // Get active guests (currently staying)
-  const activeGuests = guests.filter(
-    (g) => g.flatId === flatId && !g.checkOutDate
-  );
+  const now = referenceDate || new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  // Get first and last day of current month
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+  const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+  const daysInMonth = lastDayOfMonth.getDate();
+
+  // Get guests that were active during the current month
+  const relevantGuests = guests.filter((g) => {
+    if (g.flatId !== flatId) return false;
+    
+    const checkIn = new Date(g.checkInDate);
+    const checkOut = g.checkOutDate ? new Date(g.checkOutDate) : now;
+    
+    // Guest was active if they checked in before or during the month
+    // and checked out after or during the month
+    return checkIn <= lastDayOfMonth && checkOut >= firstDayOfMonth;
+  });
 
   // Get bills that should be adjusted (rent, utilities)
   const adjustableBills = bills.filter(
@@ -35,19 +53,29 @@ export function calculateGuestAdjustments(
       (b.category === "RENT" || b.category === "UTILITY")
   );
 
-  if (activeGuests.length === 0 || adjustableBills.length === 0) {
+  if (relevantGuests.length === 0 || adjustableBills.length === 0) {
     return [];
   }
 
-  // Calculate total guest days per host
+  // Calculate guest days per host within the current month
   const guestDaysPerHost = new Map<string, number>();
-  const now = new Date();
 
-  activeGuests.forEach((guest) => {
+  relevantGuests.forEach((guest) => {
     const checkIn = new Date(guest.checkInDate);
-    const daysStayed = Math.ceil((now.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
-    const current = guestDaysPerHost.get(guest.hostMemberId) || 0;
-    guestDaysPerHost.set(guest.hostMemberId, current + daysStayed);
+    const checkOut = guest.checkOutDate ? new Date(guest.checkOutDate) : now;
+    
+    // Calculate actual days stayed within the current month
+    const monthStart = checkIn < firstDayOfMonth ? firstDayOfMonth : checkIn;
+    const monthEnd = checkOut > lastDayOfMonth ? lastDayOfMonth : checkOut;
+    
+    const daysStayed = Math.ceil(
+      (monthEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)
+    ) + 1; // +1 to include both start and end days
+    
+    if (daysStayed > 0) {
+      const current = guestDaysPerHost.get(guest.hostMemberId) || 0;
+      guestDaysPerHost.set(guest.hostMemberId, current + daysStayed);
+    }
   });
 
   // Calculate adjustments for each bill
@@ -59,24 +87,25 @@ export function calculateGuestAdjustments(
 
     if (totalGuestDays === 0) return;
 
-    // Calculate per-day cost of the bill (simplified: assume monthly)
-    const daysInMonth = 30;
-    const dailyCost = bill.amount / daysInMonth;
+    // Calculate per-day cost of the bill (pro-rated for the month)
+    // const dailyCost = bill.amount / daysInMonth; // Not used, kept for reference
 
     // Each guest day adds to the host's share
+    // The adjustment is: (guest days / total days in month) * (bill amount / member count)
     guestDaysPerHost.forEach((days, hostMemberId) => {
       // Host pays extra for their guest days
-      const extraAmount = (days * dailyCost) / memberCount;
+      // Formula: (guest days / days in month) * (bill amount / member count)
+      const extraAmount = (days / daysInMonth) * (bill.amount / memberCount);
 
       const existing = adjustments.get(hostMemberId);
       if (existing) {
         existing.adjustmentAmount += extraAmount;
-        existing.reason += `, ${bill.name} (${days} guest days)`;
+        existing.reason += `, ${bill.name} (${days} days in month)`;
       } else {
         adjustments.set(hostMemberId, {
           memberId: hostMemberId,
           adjustmentAmount: extraAmount,
-          reason: `${bill.name} (${days} guest days)`,
+          reason: `${bill.name} (${days} days in month)`,
         });
       }
     });

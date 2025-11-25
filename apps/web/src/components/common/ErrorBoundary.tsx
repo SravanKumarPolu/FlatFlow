@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Something went wrong
               </h2>
               <p className="text-base-content/60 mb-4">
-                We're sorry, but something unexpected happened. Please try refreshing the page.
+                We&apos;re sorry, but something unexpected happened. Please try refreshing the page.
               </p>
               {import.meta.env.DEV && this.state.error && (
                 <div className="alert alert-error mb-4 text-left">

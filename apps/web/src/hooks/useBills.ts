@@ -1,5 +1,4 @@
 import { useBillsStore } from "../stores/billsStore";
-import { Bill } from "@flatflow/core";
 
 /**
  * Hook for managing bills data

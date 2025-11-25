@@ -1,4 +1,4 @@
-import { useImpulseControlStore, SpendingLimit, ImpulseCategory } from "../stores/impulseControlStore";
+import { useImpulseControlStore } from "../stores/impulseControlStore";
 
 export function useImpulseControl() {
   const store = useImpulseControlStore();

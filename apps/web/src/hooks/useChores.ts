@@ -1,5 +1,4 @@
 import { useChoresStore } from "../stores/choresStore";
-import { Chore, ChoreCompletion } from "@flatflow/core";
 
 export function useChores() {
   const store = useChoresStore();

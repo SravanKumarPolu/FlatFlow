@@ -306,3 +306,6 @@ After setup:
 
 The Capacitor configuration is ready. Follow the installation commands above to add platforms and start building native apps.
 
+
+
+
