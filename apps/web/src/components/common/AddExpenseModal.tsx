@@ -36,7 +36,7 @@ export function AddExpenseModal({
   const { members } = useMembers();
   const { getCurrentFlatId } = useFlat();
   const { success } = useToast();
-  const { limits } = useImpulseControl();
+  const { limits, globalEnabled } = useImpulseControl();
   const currentFlatId = flatId || getCurrentFlatId();
   const activeMembers = members.filter((m) => m.isActive);
   const [showNudge, setShowNudge] = useState(false);
@@ -93,7 +93,7 @@ export function AddExpenseModal({
     // Check for impulse control nudge (only for new expenses)
     if (!expense) {
       const flatExpenses = expenses.filter((e) => e.flatId === currentFlatId);
-      const nudge = shouldNudge(data.category, data.amount, flatExpenses, limits);
+      const nudge = shouldNudge(data.category, data.amount, flatExpenses, limits, globalEnabled);
       if (nudge.shouldNudge && !showNudge) {
         setNudgeMessage(nudge.message);
         setShowNudge(true);

@@ -5,15 +5,17 @@ export type ImpulseCategory = "SWIGGY" | "OLA_UBER" | "FOOD" | "TRAVEL";
 
 export interface SpendingLimit {
   category: ImpulseCategory;
-  weeklyLimit: number;
-  monthlyLimit: number;
+  weeklyLimit: number | null; // null means no limit
+  monthlyLimit: number | null; // null means no limit
   enabled: boolean;
 }
 
 interface ImpulseControlState {
   limits: SpendingLimit[];
-  setLimit: (category: ImpulseCategory, weeklyLimit: number, monthlyLimit: number, enabled: boolean) => void;
+  globalEnabled: boolean; // Global toggle for all nudges
+  setLimit: (category: ImpulseCategory, weeklyLimit: number | null, monthlyLimit: number | null, enabled: boolean) => void;
   getLimit: (category: ImpulseCategory) => SpendingLimit | undefined;
+  setGlobalEnabled: (enabled: boolean) => void;
   resetLimits: () => void;
 }
 
@@ -28,6 +30,7 @@ export const useImpulseControlStore = create<ImpulseControlState>()(
   persist(
     (set, get) => ({
       limits: defaultLimits,
+      globalEnabled: true, // Default: nudges enabled
 
       setLimit: (category, weeklyLimit, monthlyLimit, enabled) => {
         set((state) => {
@@ -52,8 +55,12 @@ export const useImpulseControlStore = create<ImpulseControlState>()(
         return get().limits.find((l) => l.category === category);
       },
 
+      setGlobalEnabled: (enabled) => {
+        set({ globalEnabled: enabled });
+      },
+
       resetLimits: () => {
-        set({ limits: defaultLimits });
+        set({ limits: defaultLimits, globalEnabled: true });
       },
     }),
     {

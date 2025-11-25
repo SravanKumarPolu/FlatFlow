@@ -5,6 +5,7 @@ import { Button, Input } from "@flatflow/ui";
 import { Chore } from "@flatflow/core";
 import { useChores, useMembers, useFlat, useToast } from "../../hooks";
 import { choreFormSchema, type ChoreFormData } from "../../lib/validation";
+import { calculateNextDueDate } from "../../lib/choreUtils";
 
 interface AddChoreModalProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export function AddChoreModal({ isOpen, onClose, chore }: AddChoreModalProps) {
       rotationOrder: [],
       currentAssigneeId: "",
       frequency: "WEEKLY",
+      rotationEnabled: true,
+      nextDueDate: calculateNextDueDate("WEEKLY"),
       isActive: true,
     },
   });
@@ -53,16 +56,21 @@ export function AddChoreModal({ isOpen, onClose, chore }: AddChoreModalProps) {
           rotationOrder: chore.rotationOrder,
           currentAssigneeId: chore.currentAssigneeId,
           frequency: chore.frequency,
+          rotationEnabled: chore.rotationEnabled ?? true,
+          nextDueDate: chore.nextDueDate || calculateNextDueDate(chore.frequency),
           isActive: chore.isActive,
         });
       } else {
+        const defaultFrequency = "WEEKLY";
         reset({
           name: "",
           category: "CLEANING",
           description: "",
           rotationOrder: flatMembers.length > 0 ? [flatMembers[0].id] : [],
           currentAssigneeId: flatMembers.length > 0 ? flatMembers[0].id : "",
-          frequency: "WEEKLY",
+          frequency: defaultFrequency,
+          rotationEnabled: true,
+          nextDueDate: calculateNextDueDate(defaultFrequency),
           isActive: true,
         });
       }
@@ -102,6 +110,8 @@ export function AddChoreModal({ isOpen, onClose, chore }: AddChoreModalProps) {
         rotationOrder: data.rotationOrder,
         currentAssigneeId: data.currentAssigneeId,
         frequency: data.frequency,
+        rotationEnabled: data.rotationEnabled,
+        nextDueDate: data.nextDueDate,
         isActive: data.isActive,
       });
       success(`Chore "${data.name}" updated successfully`);
@@ -114,6 +124,8 @@ export function AddChoreModal({ isOpen, onClose, chore }: AddChoreModalProps) {
         rotationOrder: data.rotationOrder,
         currentAssigneeId: data.currentAssigneeId,
         frequency: data.frequency,
+        rotationEnabled: data.rotationEnabled,
+        nextDueDate: data.nextDueDate,
         isActive: data.isActive,
       });
       success(`Chore "${data.name}" added successfully`);
@@ -194,11 +206,16 @@ export function AddChoreModal({ isOpen, onClose, chore }: AddChoreModalProps) {
               </label>
               <select
                 className="select select-bordered w-full"
-                {...register("frequency")}
+                {...register("frequency", {
+                  onChange: (e) => {
+                    const newFrequency = e.target.value as Chore["frequency"];
+                    setValue("nextDueDate", calculateNextDueDate(newFrequency));
+                  },
+                })}
               >
                 <option value="DAILY">Daily</option>
                 <option value="WEEKLY">Weekly</option>
-                <option value="BIWEEKLY">Bi-weekly</option>
+                <option value="BI_WEEKLY">Bi-weekly</option>
                 <option value="MONTHLY">Monthly</option>
               </select>
               {errors.frequency && (
@@ -270,6 +287,52 @@ export function AddChoreModal({ isOpen, onClose, chore }: AddChoreModalProps) {
                 <label className="label">
                   <span className="label-text-alt text-error">
                     {errors.currentAssigneeId.message}
+                  </span>
+                </label>
+              )}
+            </div>
+
+            <div className="form-control">
+              <label className="cursor-pointer label justify-start gap-3">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary"
+                  {...register("rotationEnabled")}
+                />
+                <span className="label-text">Enable Auto-Rotation</span>
+                <span className="label-text-alt text-base-content/60">
+                  Automatically rotate to next member after completion
+                </span>
+              </label>
+            </div>
+
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Next Due Date</span>
+              </label>
+              <input
+                type="date"
+                className="input input-bordered w-full"
+                {...register("nextDueDate", {
+                  setValueAs: (value: string) => {
+                    // Convert YYYY-MM-DD to ISO string for storage
+                    if (value) {
+                      const date = new Date(value + "T00:00:00");
+                      return date.toISOString();
+                    }
+                    return value;
+                  },
+                })}
+                defaultValue={
+                  watch("nextDueDate")
+                    ? new Date(watch("nextDueDate")).toISOString().split("T")[0]
+                    : ""
+                }
+              />
+              {errors.nextDueDate && (
+                <label className="label">
+                  <span className="label-text-alt text-error">
+                    {errors.nextDueDate.message}
                   </span>
                 </label>
               )}

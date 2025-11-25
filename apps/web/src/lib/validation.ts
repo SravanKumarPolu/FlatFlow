@@ -71,7 +71,9 @@ export const choreFormSchema = z.object({
   description: z.string().optional().or(z.literal("")),
   rotationOrder: z.array(z.string()).min(1, "At least one member must be in rotation"),
   currentAssigneeId: z.string().min(1, "Please select current assignee"),
-  frequency: z.enum(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]),
+  frequency: z.enum(["DAILY", "WEEKLY", "BI_WEEKLY", "MONTHLY"]),
+  rotationEnabled: z.boolean(),
+  nextDueDate: z.string().min(1, "Next due date is required"),
   isActive: z.boolean(),
 });
 

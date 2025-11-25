@@ -86,6 +86,8 @@ export interface BillPayment {
 }
 
 export type ChoreCategory = "CLEANING" | "KITCHEN" | "BATHROOM" | "TRASH" | "UTILITIES" | "OTHER";
+export type ChoreFrequency = "DAILY" | "WEEKLY" | "BI_WEEKLY" | "MONTHLY";
+export type ChoreStatus = "upcoming" | "due_today" | "overdue";
 
 export interface Chore {
   id: string;
@@ -95,10 +97,12 @@ export interface Chore {
   description?: string;
   rotationOrder: string[]; // Array of member IDs in rotation order
   currentAssigneeId: string; // Current member assigned
-  frequency: "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY";
-  isActive: boolean;
+  frequency: ChoreFrequency;
+  rotationEnabled: boolean; // Whether to auto-rotate after completion
+  nextDueDate: string; // ISO date - when this chore is next due
   lastCompletedAt?: string; // ISO date
   lastCompletedBy?: string; // Member ID
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }

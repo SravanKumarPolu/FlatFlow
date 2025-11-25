@@ -7,13 +7,15 @@ import {
 import { EmptyState } from "../../components/common/EmptyState";
 import { Button } from "@flatflow/ui";
 import { Expense } from "@flatflow/core";
-import { useExpenses, useMembers, useToast, useFlat } from "../../hooks";
+import { useExpenses, useMembers, useToast, useFlat, useImpulseControl } from "../../hooks";
+import { calculateSpendingStatus } from "../../lib/impulseControl";
 
 export default function ExpensesPage() {
   const { expenses, deleteExpense, getExpensesByFlatId } = useExpenses();
   const { members } = useMembers();
   const { success } = useToast();
   const { getCurrentFlatId } = useFlat();
+  const { limits, globalEnabled } = useImpulseControl();
   const currentFlatId = getCurrentFlatId();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -44,6 +46,12 @@ export default function ExpensesPage() {
       .filter((exp) => exp.date >= startOfMonth && exp.date <= endOfMonth)
       .reduce((sum, exp) => sum + exp.amount, 0);
   }, [flatExpenses]);
+
+  // Calculate impulse control spending status
+  const spendingStatuses = useMemo(() => {
+    if (!globalEnabled) return [];
+    return calculateSpendingStatus(flatExpenses, limits);
+  }, [flatExpenses, limits, globalEnabled]);
 
   const getCategoryIcon = (category: Expense["category"]) => {
     const icons: Record<Expense["category"], string> = {
@@ -89,6 +97,73 @@ export default function ExpensesPage() {
           </Button>
         }
       />
+
+      {/* Impulse Control Nudges */}
+      {globalEnabled && spendingStatuses.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {spendingStatuses
+            .filter((status) => {
+              const limit = limits.find((l) => l.category === status.category);
+              return limit?.enabled && (status.weeklyPercentage >= 80 || status.monthlyPercentage >= 80);
+            })
+            .map((status) => {
+              const limit = limits.find((l) => l.category === status.category);
+              if (!limit) return null;
+
+              const isExceeded = status.weeklyExceeded || status.monthlyExceeded;
+              const isClose = !isExceeded && (status.weeklyPercentage >= 80 || status.monthlyPercentage >= 80);
+              
+              const categoryLabels: Record<string, string> = {
+                SWIGGY: "Swiggy",
+                OLA_UBER: "Ola/Uber",
+                FOOD: "Food",
+                TRAVEL: "Travel",
+              };
+
+              let message = "";
+              if (isExceeded) {
+                if (status.weeklyExceeded && status.monthlyExceeded) {
+                  message = `You've crossed your ${categoryLabels[status.category]} weekly and monthly limits. Consider pausing new ${status.category.toLowerCase()} expenses this period.`;
+                } else if (status.weeklyExceeded) {
+                  message = `You've crossed your ${categoryLabels[status.category]} weekly limit. Consider pausing new ${status.category.toLowerCase()} expenses this week.`;
+                } else {
+                  message = `You've crossed your ${categoryLabels[status.category]} monthly limit. Consider pausing new ${status.category.toLowerCase()} expenses this month.`;
+                }
+              } else if (isClose) {
+                message = `You're close to your ${categoryLabels[status.category]} spending limit. Want to slow down a bit?`;
+              }
+
+              if (!message) return null;
+
+              return (
+                <div
+                  key={status.category}
+                  className={`alert ${
+                    isExceeded ? "alert-error" : "alert-warning"
+                  } shadow-sm`}
+                >
+                  <div>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 flex-shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <span className="text-sm">{message}</span>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       {/* Filters Row */}
       <div className="mb-6 flex flex-wrap gap-4 items-center justify-between">
@@ -142,18 +217,65 @@ export default function ExpensesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {flatExpenses.map((expense) => (
-            <div
-              key={expense.id}
-              className="card bg-base-100 shadow-sm hover:shadow-md transition-shadow border border-base-300"
-            >
-              <div className="card-body p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="text-2xl">{getCategoryIcon(expense.category)}</div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold mb-1">{expense.description}</h3>
-                      <div className="flex flex-wrap gap-2 text-sm text-base-content/60">
+          {flatExpenses.map((expense) => {
+            // Check if this expense category has impulse control limits
+            const isImpulseCategory = ["SWIGGY", "OLA_UBER", "FOOD", "TRAVEL"].includes(expense.category);
+            const categoryStatus = isImpulseCategory
+              ? spendingStatuses.find((s) => s.category === expense.category)
+              : null;
+            const limit = isImpulseCategory
+              ? limits.find((l) => l.category === expense.category)
+              : null;
+            const showWarning = globalEnabled &&
+              limit?.enabled &&
+              categoryStatus &&
+              (categoryStatus.weeklyPercentage >= 80 || categoryStatus.monthlyPercentage >= 80);
+
+            return (
+              <div
+                key={expense.id}
+                className="card bg-base-100 shadow-sm hover:shadow-md transition-shadow border border-base-300"
+              >
+                <div className="card-body p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="text-2xl relative">
+                        {getCategoryIcon(expense.category)}
+                        {showWarning && (
+                          <span
+                            className={`absolute -top-1 -right-1 text-xs ${
+                              categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                                ? "text-error"
+                                : "text-warning"
+                            }`}
+                            title={
+                              categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                                ? "Limit exceeded"
+                                : "Close to limit"
+                            }
+                          >
+                            ⚠️
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold">{expense.description}</h3>
+                          {showWarning && (
+                            <span
+                              className={`badge badge-sm ${
+                                categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                                  ? "badge-error"
+                                  : "badge-warning"
+                              }`}
+                            >
+                              {categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                                ? "Over Limit"
+                                : "Near Limit"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-sm text-base-content/60">
                         <span>
                           {new Date(expense.date).toLocaleDateString("en-IN", {
                             day: "numeric",
@@ -167,6 +289,7 @@ export default function ExpensesPage() {
                         </span>
                         <span>•</span>
                         <span>Paid by {getMemberName(expense.paidByMemberId)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -201,8 +324,8 @@ export default function ExpensesPage() {
                   </Button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

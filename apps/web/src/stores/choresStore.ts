@@ -1,6 +1,31 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Chore, ChoreCompletion } from "@flatflow/core";
+import { calculateNextDueDate, getNextAssignee } from "../lib/choreUtils";
+
+/**
+ * Migrate existing chores to include new required fields
+ * This ensures backward compatibility with chores created before nextDueDate and rotationEnabled were added
+ */
+function migrateChores(chores: any[]): Chore[] {
+  return chores.map((chore) => {
+    // If chore is missing nextDueDate or rotationEnabled, add defaults
+    if (!chore.nextDueDate || !chore.hasOwnProperty("rotationEnabled")) {
+      const migratedChore: Chore = {
+        ...chore,
+        rotationEnabled: chore.rotationEnabled ?? true,
+        nextDueDate:
+          chore.nextDueDate ||
+          calculateNextDueDate(
+            chore.frequency || "WEEKLY",
+            chore.lastCompletedAt ? new Date(chore.lastCompletedAt) : new Date()
+          ),
+      };
+      return migratedChore;
+    }
+    return chore as Chore;
+  });
+}
 
 interface ChoresState {
   chores: Chore[];
@@ -75,11 +100,15 @@ export const useChoresStore = create<ChoresState>()(
 
       rotateChore: (choreId) => {
         const chore = get().getChore(choreId);
-        if (!chore || chore.rotationOrder.length === 0) return undefined;
+        if (!chore || !chore.rotationEnabled || chore.rotationOrder.length < 2) {
+          return undefined;
+        }
 
-        const currentIndex = chore.rotationOrder.indexOf(chore.currentAssigneeId);
-        const nextIndex = (currentIndex + 1) % chore.rotationOrder.length;
-        const nextAssigneeId = chore.rotationOrder[nextIndex];
+        // Use pure helper function for rotation logic
+        const nextAssigneeId = getNextAssignee(
+          chore.currentAssigneeId,
+          chore.rotationOrder
+        );
 
         get().updateChore(choreId, {
           currentAssigneeId: nextAssigneeId,
@@ -92,29 +121,44 @@ export const useChoresStore = create<ChoresState>()(
         const chore = get().getChore(choreId);
         if (!chore) return;
 
-        const now = new Date().toISOString();
+        const now = new Date();
+        const nowISO = now.toISOString();
+        
+        // Create completion history entry
         const completion: ChoreCompletion = {
           id: generateCompletionId(),
           choreId,
           flatId: chore.flatId,
           completedByMemberId: memberId,
-          completedAt: now,
+          completedAt: nowISO,
           note,
-          createdAt: now,
+          createdAt: nowISO,
         };
 
         set((state) => ({
           completions: [...state.completions, completion],
         }));
 
-        // Update chore with completion info
-        get().updateChore(choreId, {
-          lastCompletedAt: now,
-          lastCompletedBy: memberId,
-        });
+        // Calculate next due date based on frequency
+        const nextDueDate = calculateNextDueDate(chore.frequency, now);
 
-        // Auto-rotate if needed (rotate after completion)
-        get().rotateChore(choreId);
+        // Update chore with completion info and next due date
+        const updates: Partial<Chore> = {
+          lastCompletedAt: nowISO,
+          lastCompletedBy: memberId,
+          nextDueDate,
+        };
+
+        // Auto-rotate if rotation is enabled and there are multiple members
+        if (chore.rotationEnabled && chore.rotationOrder.length > 1) {
+          // Use pure helper function for rotation logic
+          updates.currentAssigneeId = getNextAssignee(
+            chore.currentAssigneeId,
+            chore.rotationOrder
+          );
+        }
+
+        get().updateChore(choreId, updates);
       },
 
       getCompletionsByChoreId: (choreId) => {
@@ -135,6 +179,19 @@ export const useChoresStore = create<ChoresState>()(
     }),
     {
       name: "flatflow-chores-storage",
+      // Migrate existing chores on rehydration
+      onRehydrateStorage: () => (state) => {
+        if (state?.chores && state.chores.length > 0) {
+          const migratedChores = migrateChores(state.chores);
+          // Check if any migration occurred
+          const needsMigration = migratedChores.some(
+            (c, i) => c !== state.chores[i]
+          );
+          if (needsMigration) {
+            state.chores = migratedChores;
+          }
+        }
+      },
     }
   )
 );

@@ -112,7 +112,7 @@ export function getChoresNeedingReminders(
             ? 1
             : chore.frequency === "WEEKLY"
             ? 7
-            : chore.frequency === "BIWEEKLY"
+            : chore.frequency === "BI_WEEKLY"
             ? 14
             : 30; // MONTHLY
 
@@ -137,7 +137,7 @@ export function getChoresNeedingReminders(
             ? 1
             : chore.frequency === "WEEKLY"
             ? 7
-            : chore.frequency === "BIWEEKLY"
+            : chore.frequency === "BI_WEEKLY"
             ? 14
             : 30; // MONTHLY
 

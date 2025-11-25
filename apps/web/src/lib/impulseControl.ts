@@ -5,12 +5,14 @@ export interface SpendingStatus {
   category: ImpulseCategory;
   currentWeekly: number;
   currentMonthly: number;
-  weeklyLimit: number;
-  monthlyLimit: number;
+  weeklyLimit: number | null;
+  monthlyLimit: number | null;
   weeklyExceeded: boolean;
   monthlyExceeded: boolean;
   weeklyPercentage: number;
   monthlyPercentage: number;
+  weeklyRemaining: number | null;
+  monthlyRemaining: number | null;
 }
 
 /**
@@ -55,10 +57,12 @@ export function calculateSpendingStatus(
       currentMonthly,
       weeklyLimit: limit.weeklyLimit,
       monthlyLimit: limit.monthlyLimit,
-      weeklyExceeded: currentWeekly > limit.weeklyLimit,
-      monthlyExceeded: currentMonthly > limit.monthlyLimit,
-      weeklyPercentage: limit.weeklyLimit > 0 ? (currentWeekly / limit.weeklyLimit) * 100 : 0,
-      monthlyPercentage: limit.monthlyLimit > 0 ? (currentMonthly / limit.monthlyLimit) * 100 : 0,
+      weeklyExceeded: limit.weeklyLimit !== null && currentWeekly >= limit.weeklyLimit,
+      monthlyExceeded: limit.monthlyLimit !== null && currentMonthly >= limit.monthlyLimit,
+      weeklyPercentage: limit.weeklyLimit !== null && limit.weeklyLimit > 0 ? (currentWeekly / limit.weeklyLimit) * 100 : 0,
+      monthlyPercentage: limit.monthlyLimit !== null && limit.monthlyLimit > 0 ? (currentMonthly / limit.monthlyLimit) * 100 : 0,
+      weeklyRemaining: limit.weeklyLimit !== null ? limit.weeklyLimit - currentWeekly : null,
+      monthlyRemaining: limit.monthlyLimit !== null ? limit.monthlyLimit - currentMonthly : null,
     });
   });
 
@@ -72,8 +76,14 @@ export function shouldNudge(
   category: ExpenseCategory,
   amount: number,
   expenses: Expense[],
-  limits: SpendingLimit[]
+  limits: SpendingLimit[],
+  globalEnabled: boolean = true
 ): { shouldNudge: boolean; message: string } {
+  // Check global toggle first
+  if (!globalEnabled) {
+    return { shouldNudge: false, message: "" };
+  }
+
   const impulseCategory = category as ImpulseCategory;
   const limit = limits.find((l) => l.category === impulseCategory);
 
@@ -92,24 +102,37 @@ export function shouldNudge(
   const newWeekly = status.currentWeekly + amount;
   const newMonthly = status.currentMonthly + amount;
 
-  if (newWeekly > limit.weeklyLimit || newMonthly > limit.monthlyLimit) {
-    let message = `⚠️ You're about to exceed your ${category} spending limit!\n\n`;
-    message += `Current weekly: ₹${status.currentWeekly.toFixed(2)} / ₹${limit.weeklyLimit.toFixed(2)}\n`;
-    message += `Current monthly: ₹${status.currentMonthly.toFixed(2)} / ₹${limit.monthlyLimit.toFixed(2)}\n\n`;
-    message += `Adding ₹${amount.toFixed(2)} would exceed your limit. Are you sure?`;
+  // Hard nudge: >= 100% of limit (reaches or exceeds)
+  const wouldExceedWeekly = limit.weeklyLimit !== null && newWeekly >= limit.weeklyLimit;
+  const wouldExceedMonthly = limit.monthlyLimit !== null && newMonthly >= limit.monthlyLimit;
+
+  if (wouldExceedWeekly || wouldExceedMonthly) {
+    let message = "";
+    if (wouldExceedWeekly && wouldExceedMonthly) {
+      message = `You've crossed your ${category} weekly and monthly limits. Consider pausing new ${category.toLowerCase()} expenses this period.`;
+    } else if (wouldExceedWeekly) {
+      message = `You've crossed your ${category} weekly limit. Consider pausing new ${category.toLowerCase()} expenses this week.`;
+    } else {
+      message = `You've crossed your ${category} monthly limit. Consider pausing new ${category.toLowerCase()} expenses this month.`;
+    }
 
     return { shouldNudge: true, message };
   }
 
-  // Warn if close to limit (80% threshold)
+  // Soft nudge: 80-90% of limit
   if (
-    status.weeklyPercentage >= 80 ||
-    status.monthlyPercentage >= 80
+    (limit.weeklyLimit !== null && status.weeklyPercentage >= 80 && status.weeklyPercentage < 100) ||
+    (limit.monthlyLimit !== null && status.monthlyPercentage >= 80 && status.monthlyPercentage < 100)
   ) {
-    let message = `⚠️ You're close to your ${category} spending limit!\n\n`;
-    message += `Weekly: ${status.weeklyPercentage.toFixed(0)}% used\n`;
-    message += `Monthly: ${status.monthlyPercentage.toFixed(0)}% used\n\n`;
-    message += `Are you sure you want to add this expense?`;
+    const categoryName = category === "SWIGGY" ? "Swiggy" : category === "OLA_UBER" ? "Ola/Uber" : category;
+    let message = `You're close to your ${categoryName} spending limit. Want to slow down a bit?`;
+    
+    if (status.weeklyPercentage >= 80 && limit.weeklyLimit !== null) {
+      message += ` (${status.weeklyPercentage.toFixed(0)}% of weekly limit used)`;
+    }
+    if (status.monthlyPercentage >= 80 && limit.monthlyLimit !== null) {
+      message += ` (${status.monthlyPercentage.toFixed(0)}% of monthly limit used)`;
+    }
 
     return { shouldNudge: true, message };
   }
