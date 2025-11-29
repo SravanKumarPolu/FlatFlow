@@ -23,10 +23,6 @@ const config: CapacitorConfig = {
   // Monorepo structure: apps/mobile-shell/ -> apps/web/dist/
   webDir: "../../apps/web/dist",
   
-  // Use the web app's own runtime, not Capacitor's bundled one
-  // This allows PWA features (service worker, manifest) to work properly
-  bundledWebRuntime: false,
-  
   /**
    * Server Configuration (Optional)
    * 

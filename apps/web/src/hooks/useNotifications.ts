@@ -1,13 +1,28 @@
 import { useState, useEffect, useCallback } from "react";
 
 export function useNotifications() {
-  const [permission, setPermission] = useState<NotificationPermission>(
-    typeof window !== "undefined" ? Notification.permission : "default"
-  );
+  const [permission, setPermission] = useState<NotificationPermission>(() => {
+    if (typeof window === "undefined") return "default";
+    if (!("Notification" in window)) return "default";
+    try {
+      return Notification.permission;
+    } catch {
+      return "default";
+    }
+  });
   const [isSupported, setIsSupported] = useState(false);
 
   useEffect(() => {
-    setIsSupported("Notification" in window);
+    setIsSupported(typeof window !== "undefined" && "Notification" in window);
+    
+    // Update permission state if Notification API becomes available
+    if (typeof window !== "undefined" && "Notification" in window) {
+      try {
+        setPermission(Notification.permission);
+      } catch {
+        // Ignore errors
+      }
+    }
   }, []);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
@@ -20,6 +35,10 @@ export function useNotifications() {
     }
 
     if (permission === "denied") {
+      return false;
+    }
+
+    if (typeof window === "undefined" || !("Notification" in window)) {
       return false;
     }
 
@@ -36,6 +55,10 @@ export function useNotifications() {
   const showNotification = useCallback(
     (title: string, options?: NotificationOptions) => {
       if (!isSupported || permission !== "granted") {
+        return null;
+      }
+
+      if (typeof window === "undefined" || !("Notification" in window)) {
         return null;
       }
 
