@@ -244,3 +244,5 @@ The Capacitor setup is ready. Run the installation commands above to add platfor
 
 
 
+
+
