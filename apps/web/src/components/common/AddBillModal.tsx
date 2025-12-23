@@ -5,6 +5,7 @@ import { Button, Input } from "@flatflow/ui";
 import { Bill, BillCategory } from "@flatflow/core";
 import { useBills, useFlat, useToast } from "../../hooks";
 import { billFormSchema, type BillFormData } from "../../lib/validation";
+import { logError } from "../../lib/logger";
 
 interface AddBillModalProps {
   isOpen: boolean;
@@ -13,7 +14,13 @@ interface AddBillModalProps {
   flatId?: string;
 }
 
-const BILL_CATEGORIES: BillCategory[] = ["RENT", "UTILITY", "MAID", "FOOD", "OTHER"];
+const BILL_CATEGORIES: BillCategory[] = [
+  "RENT",
+  "UTILITY",
+  "MAID",
+  "FOOD",
+  "OTHER",
+];
 
 export function AddBillModal({
   isOpen,
@@ -23,13 +30,13 @@ export function AddBillModal({
 }: AddBillModalProps) {
   const { addBill, updateBill } = useBills();
   const { getCurrentFlatId } = useFlat();
-  const { success } = useToast();
+  const { success, error } = useToast();
   const currentFlatId = flatId || getCurrentFlatId();
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     reset,
   } = useForm<BillFormData>({
     resolver: zodResolver(billFormSchema),
@@ -68,32 +75,46 @@ export function AddBillModal({
     }
   }, [isOpen, bill, reset]);
 
-  const onSubmit = (data: BillFormData) => {
-    if (bill) {
-      // Edit mode
-      updateBill(bill.id, {
-        name: data.name,
-        amount: data.amount,
-        dueDay: data.dueDay,
-        category: data.category,
-        splitType: data.splitType,
-        isActive: data.isActive,
+  const onSubmit = async (data: BillFormData) => {
+    try {
+      if (bill) {
+        // Edit mode
+        updateBill(bill.id, {
+          name: data.name,
+          amount: data.amount,
+          dueDay: data.dueDay,
+          category: data.category,
+          splitType: data.splitType,
+          isActive: data.isActive,
+        });
+        success(`Bill "${data.name}" updated successfully`);
+      } else {
+        // Add mode
+        if (!currentFlatId) {
+          error("Please create a flat first");
+          return;
+        }
+        addBill({
+          flatId: currentFlatId,
+          name: data.name,
+          amount: data.amount,
+          dueDay: data.dueDay,
+          category: data.category,
+          splitType: data.splitType,
+          isActive: data.isActive,
+        });
+        success(`Bill "${data.name}" added successfully`);
+      }
+      onClose();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to save bill";
+      error(errorMessage);
+      logError(err, {
+        context: "AddBillModal",
+        action: bill ? "update" : "create",
       });
-      success(`Bill "${data.name}" updated successfully`);
-    } else {
-      // Add mode
-      addBill({
-        flatId: currentFlatId,
-        name: data.name,
-        amount: data.amount,
-        dueDay: data.dueDay,
-        category: data.category,
-        splitType: data.splitType,
-        isActive: data.isActive,
-      });
-      success(`Bill "${data.name}" added successfully`);
     }
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -201,10 +222,15 @@ export function AddBillModal({
             </div>
 
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={onClose}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={isSubmitting}>
                 {bill ? "Update" : "Add"} Bill
               </Button>
             </div>

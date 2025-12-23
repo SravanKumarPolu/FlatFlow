@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { StatCard, NoFlatBanner, BalanceBreakdown } from "../../components/common";
 import { PageHeader } from "../../components/common/PageHeader";
 import { calculateMemberBalances } from "../../lib/balanceCalculations";
@@ -15,7 +16,6 @@ import {
 } from "../../hooks";
 import { getNextDueDate, formatDueDate, getDaysUntilDue } from "../../lib/billUtils";
 import { checkAndShowBillReminders, checkAndShowChoreReminders, getChoresNeedingReminders } from "../../lib/notifications";
-import { useEffect, useRef } from "react";
 
 export default function DashboardPage() {
   const { bills, getActiveBills, getBillsByFlatId } = useBills();
@@ -135,7 +135,7 @@ export default function DashboardPage() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
-    
+
     return flatExpenses
       .filter((exp) => exp.date >= startOfMonth && exp.date <= endOfMonth)
       .reduce((sum, exp) => sum + exp.amount, 0);
@@ -144,7 +144,7 @@ export default function DashboardPage() {
   // Calculate balance with improved logic
   // If no current user is set, skip balance calculations
   const currentUserId = currentMemberId;
-  
+
   const { youOwe, youWillReceive } = useMemo(() => {
     if (!currentUserId || !currentFlatId) {
       return { youOwe: 0, youWillReceive: 0 };
@@ -163,9 +163,9 @@ export default function DashboardPage() {
     flatExpenses.forEach((expense) => {
       const participantCount = expense.participantMemberIds.length;
       if (participantCount === 0) return;
-      
+
       const sharePerPerson = expense.amount / participantCount;
-      
+
       if (expense.participantMemberIds.includes(currentUserId)) {
         if (expense.paidByMemberId === currentUserId) {
           // You paid, others owe you
@@ -182,14 +182,14 @@ export default function DashboardPage() {
     // Only count bills that haven't been fully paid
     const activeMembers = flatMembers.filter((m) => m.isActive);
     const participantCount = activeMembers.length;
-    
+
     if (participantCount > 0) {
       activeBills.forEach((bill) => {
         // Get total payments for this bill
         const billPayments = getPaymentsByBillId(bill.id);
         const totalPaid = billPayments.reduce((sum, payment) => sum + payment.amount, 0);
         const remainingAmount = Math.max(0, bill.amount - totalPaid);
-        
+
         if (remainingAmount > 0) {
           // Calculate share based on split type
           let sharePerPerson = 0;
@@ -206,7 +206,7 @@ export default function DashboardPage() {
             // Equal split
             sharePerPerson = remainingAmount / participantCount;
           }
-          
+
           owe += sharePerPerson;
         }
       });
@@ -231,10 +231,10 @@ export default function DashboardPage() {
   // Calculate detailed balance breakdown (who owes whom)
   const memberBalances = useMemo(() => {
     if (!currentFlatId || flatMembers.length === 0) return [];
-    
+
     const settlements = getSettlementsByFlatId(currentFlatId);
     const flatBillPayments = billPayments.filter((p) => p.flatId === currentFlatId);
-    
+
     return calculateMemberBalances(
       flatExpenses,
       flatBills,
@@ -353,53 +353,12 @@ export default function DashboardPage() {
                         {reminder.daysOverdue} day{reminder.daysOverdue !== 1 ? "s" : ""} overdue • {reminder.frequency}
                       </p>
                     </div>
-                    <a
-                      href="/chores"
+                    <Link
+                      to="/chores"
                       className="btn btn-sm btn-warning"
                     >
                       View
-                    </a>
-                  </div>
-                );
-              })}
-              {overdueChores.length > 3 && (
-                <p className="text-sm text-base-content/60 text-center">
-                  +{overdueChores.length - 3} more overdue chore{overdueChores.length - 3 !== 1 ? "s" : ""}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overdue Chores Alert */}
-      {overdueChores.length > 0 && (
-        <div className="card bg-warning/10 border-warning border-2 mb-6">
-          <div className="card-body">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">⚠️</span>
-              <h2 className="card-title text-lg">Overdue Chores</h2>
-            </div>
-            <div className="space-y-2">
-              {overdueChores.slice(0, 3).map((reminder) => {
-                const chore = flatChores.find((c) => c.id === reminder.choreId);
-                return (
-                  <div
-                    key={reminder.choreId}
-                    className="flex items-center justify-between p-2 rounded-lg bg-base-100"
-                  >
-                    <div>
-                      <p className="font-semibold">{reminder.choreName}</p>
-                      <p className="text-sm text-base-content/60">
-                        {reminder.daysOverdue} day{reminder.daysOverdue !== 1 ? "s" : ""} overdue • {reminder.frequency}
-                      </p>
-                    </div>
-                    <a
-                      href="/chores"
-                      className="btn btn-sm btn-warning"
-                    >
-                      View
-                    </a>
+                    </Link>
                   </div>
                 );
               })}

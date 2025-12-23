@@ -14,11 +14,12 @@ export default function SettlementsPage() {
     useSettlements();
   const { members } = useMembers();
   const { getCurrentFlatId } = useFlat();
-  const { success } = useToast();
+  const { success, error } = useToast();
   const currentFlatId = getCurrentFlatId();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSettlement, setEditingSettlement] =
-    useState<Settlement | null>(null);
+  const [editingSettlement, setEditingSettlement] = useState<Settlement | null>(
+    null
+  );
   const [deleteConfirm, setDeleteConfirm] = useState<{
     isOpen: boolean;
     settlement: Settlement | null;
@@ -177,8 +178,16 @@ export default function SettlementsPage() {
         onClose={() => setDeleteConfirm({ isOpen: false, settlement: null })}
         onConfirm={() => {
           if (deleteConfirm.settlement) {
-            deleteSettlement(deleteConfirm.settlement.id);
-            success("Settlement deleted successfully");
+            try {
+              deleteSettlement(deleteConfirm.settlement.id);
+              success("Settlement deleted successfully");
+            } catch (err) {
+              const errorMessage =
+                err instanceof Error
+                  ? err.message
+                  : "Failed to delete settlement";
+              error(errorMessage);
+            }
           }
         }}
         title="Delete Settlement"
@@ -188,4 +197,3 @@ export default function SettlementsPage() {
     </>
   );
 }
-

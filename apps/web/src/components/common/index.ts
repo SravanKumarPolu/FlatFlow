@@ -29,4 +29,4 @@ export { GuestDetailModal } from "./GuestDetailModal";
 export { EmergencyFundTransactionModal } from "./EmergencyFundTransactionModal";
 export { EditFundNameModal } from "./EditFundNameModal";
 export { ImpulseControlSettingsModal } from "./ImpulseControlSettingsModal";
-
+export { SkeletonLoader } from "./SkeletonLoader";

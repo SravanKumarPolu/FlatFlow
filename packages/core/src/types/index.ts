@@ -59,6 +59,7 @@ export interface Expense {
   paidByMemberId: string;
   splitType: "EQUAL"; // MVP
   participantMemberIds: string[];
+  comments?: string; // Optional comments/notes about the expense
   createdAt: string;
   updatedAt: string;
 }
@@ -85,7 +86,13 @@ export interface BillPayment {
   createdAt: string;
 }
 
-export type ChoreCategory = "CLEANING" | "KITCHEN" | "BATHROOM" | "TRASH" | "UTILITIES" | "OTHER";
+export type ChoreCategory =
+  | "CLEANING"
+  | "KITCHEN"
+  | "BATHROOM"
+  | "TRASH"
+  | "UTILITIES"
+  | "OTHER";
 export type ChoreFrequency = "DAILY" | "WEEKLY" | "BI_WEEKLY" | "MONTHLY";
 export type ChoreStatus = "upcoming" | "due_today" | "overdue";
 
@@ -118,7 +125,12 @@ export interface ChoreCompletion {
 }
 
 export type GuestType = "SHARING" | "SINGLE" | "SHORT_STAY" | "STAFF" | "OTHER";
-export type IDProofType = "AADHAAR" | "PAN" | "DRIVING_LICENSE" | "PASSPORT" | "OTHER";
+export type IDProofType =
+  | "AADHAAR"
+  | "PAN"
+  | "DRIVING_LICENSE"
+  | "PASSPORT"
+  | "OTHER";
 export type PaymentStatus = "PENDING" | "PAID" | "PARTIAL" | "WAIVED";
 
 export interface Guest {
@@ -161,4 +173,3 @@ export interface EmergencyFund {
   createdAt: string;
   updatedAt: string;
 }
-

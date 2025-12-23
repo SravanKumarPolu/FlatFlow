@@ -37,7 +37,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="drawer lg:drawer-open">
       <input id="drawer-toggle" type="checkbox" className="drawer-toggle" />
-      
+
       {/* Page content */}
       <div className="drawer-content flex flex-col h-screen overflow-hidden">
         {/* Mobile Header */}
@@ -56,8 +56,29 @@ export function AppLayout({ children }: AppLayoutProps) {
         <main className="flex-1 overflow-y-auto bg-base-200">
           <Suspense
             fallback={
-              <div className="flex items-center justify-center h-full min-h-[60vh]">
-                <span className="loading loading-spinner loading-lg text-primary"></span>
+              <div className="p-6">
+                <div className="max-w-6xl mx-auto space-y-6">
+                  <div className="h-8 bg-base-300 rounded w-48 animate-pulse mb-6"></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="card bg-base-100 shadow-sm">
+                        <div className="card-body">
+                          <div className="h-4 bg-base-300 rounded w-24 mb-2 animate-pulse"></div>
+                          <div className="h-8 bg-base-300 rounded w-32 animate-pulse"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="card bg-base-100 shadow-sm">
+                    <div className="card-body">
+                      <div className="space-y-3">
+                        <div className="h-6 bg-base-300 rounded w-3/4 animate-pulse"></div>
+                        <div className="h-4 bg-base-300 rounded w-full animate-pulse"></div>
+                        <div className="h-4 bg-base-300 rounded w-2/3 animate-pulse"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             }
           >
@@ -86,4 +107,3 @@ export function AppLayout({ children }: AppLayoutProps) {
     </div>
   );
 }
-

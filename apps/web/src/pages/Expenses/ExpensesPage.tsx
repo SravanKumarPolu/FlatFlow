@@ -7,13 +7,19 @@ import {
 import { EmptyState } from "../../components/common/EmptyState";
 import { Button } from "@flatflow/ui";
 import { Expense } from "@flatflow/core";
-import { useExpenses, useMembers, useToast, useFlat, useImpulseControl } from "../../hooks";
+import {
+  useExpenses,
+  useMembers,
+  useToast,
+  useFlat,
+  useImpulseControl,
+} from "../../hooks";
 import { calculateSpendingStatus } from "../../lib/impulseControl";
 
 export default function ExpensesPage() {
   const { expenses, deleteExpense, getExpensesByFlatId } = useExpenses();
   const { members } = useMembers();
-  const { success } = useToast();
+  const { success, error } = useToast();
   const { getCurrentFlatId } = useFlat();
   const { limits, globalEnabled } = useImpulseControl();
   const currentFlatId = getCurrentFlatId();
@@ -33,15 +39,28 @@ export default function ExpensesPage() {
   // Helper to get member name by ID
   const getMemberName = (memberId: string) => {
     const member = members.find((m) => m.id === memberId);
-    return member ? `${member.emoji || ""} ${member.name}`.trim() : `Member ${memberId.slice(-4)}`;
+    return member
+      ? `${member.emoji || ""} ${member.name}`.trim()
+      : `Member ${memberId.slice(-4)}`;
   };
-  
+
   // Calculate total for current month
   const totalThisMonth = useMemo(() => {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
-    
+    const startOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1
+    ).toISOString();
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59
+    ).toISOString();
+
     return flatExpenses
       .filter((exp) => exp.date >= startOfMonth && exp.date <= endOfMonth)
       .reduce((sum, exp) => sum + exp.amount, 0);
@@ -104,15 +123,23 @@ export default function ExpensesPage() {
           {spendingStatuses
             .filter((status) => {
               const limit = limits.find((l) => l.category === status.category);
-              return limit?.enabled && (status.weeklyPercentage >= 80 || status.monthlyPercentage >= 80);
+              return (
+                limit?.enabled &&
+                (status.weeklyPercentage >= 80 ||
+                  status.monthlyPercentage >= 80)
+              );
             })
             .map((status) => {
               const limit = limits.find((l) => l.category === status.category);
               if (!limit) return null;
 
-              const isExceeded = status.weeklyExceeded || status.monthlyExceeded;
-              const isClose = !isExceeded && (status.weeklyPercentage >= 80 || status.monthlyPercentage >= 80);
-              
+              const isExceeded =
+                status.weeklyExceeded || status.monthlyExceeded;
+              const isClose =
+                !isExceeded &&
+                (status.weeklyPercentage >= 80 ||
+                  status.monthlyPercentage >= 80);
+
               const categoryLabels: Record<string, string> = {
                 SWIGGY: "Swiggy",
                 OLA_UBER: "Ola/Uber",
@@ -123,14 +150,22 @@ export default function ExpensesPage() {
               let message = "";
               if (isExceeded) {
                 if (status.weeklyExceeded && status.monthlyExceeded) {
-                  message = `You've crossed your ${categoryLabels[status.category]} weekly and monthly limits. Consider pausing new ${status.category.toLowerCase()} expenses this period.`;
+                  message = `You've crossed your ${
+                    categoryLabels[status.category]
+                  } weekly and monthly limits. Consider pausing new ${status.category.toLowerCase()} expenses this period.`;
                 } else if (status.weeklyExceeded) {
-                  message = `You've crossed your ${categoryLabels[status.category]} weekly limit. Consider pausing new ${status.category.toLowerCase()} expenses this week.`;
+                  message = `You've crossed your ${
+                    categoryLabels[status.category]
+                  } weekly limit. Consider pausing new ${status.category.toLowerCase()} expenses this week.`;
                 } else {
-                  message = `You've crossed your ${categoryLabels[status.category]} monthly limit. Consider pausing new ${status.category.toLowerCase()} expenses this month.`;
+                  message = `You've crossed your ${
+                    categoryLabels[status.category]
+                  } monthly limit. Consider pausing new ${status.category.toLowerCase()} expenses this month.`;
                 }
               } else if (isClose) {
-                message = `You're close to your ${categoryLabels[status.category]} spending limit. Want to slow down a bit?`;
+                message = `You're close to your ${
+                  categoryLabels[status.category]
+                } spending limit. Want to slow down a bit?`;
               }
 
               if (!message) return null;
@@ -219,17 +254,24 @@ export default function ExpensesPage() {
         <div className="space-y-3">
           {flatExpenses.map((expense) => {
             // Check if this expense category has impulse control limits
-            const isImpulseCategory = ["SWIGGY", "OLA_UBER", "FOOD", "TRAVEL"].includes(expense.category);
+            const isImpulseCategory = [
+              "SWIGGY",
+              "OLA_UBER",
+              "FOOD",
+              "TRAVEL",
+            ].includes(expense.category);
             const categoryStatus = isImpulseCategory
               ? spendingStatuses.find((s) => s.category === expense.category)
               : null;
             const limit = isImpulseCategory
               ? limits.find((l) => l.category === expense.category)
               : null;
-            const showWarning = globalEnabled &&
+            const showWarning =
+              globalEnabled &&
               limit?.enabled &&
               categoryStatus &&
-              (categoryStatus.weeklyPercentage >= 80 || categoryStatus.monthlyPercentage >= 80);
+              (categoryStatus.weeklyPercentage >= 80 ||
+                categoryStatus.monthlyPercentage >= 80);
 
             return (
               <div
@@ -244,12 +286,14 @@ export default function ExpensesPage() {
                         {showWarning && (
                           <span
                             className={`absolute -top-1 -right-1 text-xs ${
-                              categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                              categoryStatus?.weeklyExceeded ||
+                              categoryStatus?.monthlyExceeded
                                 ? "text-error"
                                 : "text-warning"
                             }`}
                             title={
-                              categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                              categoryStatus?.weeklyExceeded ||
+                              categoryStatus?.monthlyExceeded
                                 ? "Limit exceeded"
                                 : "Close to limit"
                             }
@@ -260,36 +304,50 @@ export default function ExpensesPage() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">{expense.description}</h3>
+                          <h3 className="font-semibold">
+                            {expense.description}
+                          </h3>
                           {showWarning && (
                             <span
                               className={`badge badge-sm ${
-                                categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                                categoryStatus?.weeklyExceeded ||
+                                categoryStatus?.monthlyExceeded
                                   ? "badge-error"
                                   : "badge-warning"
                               }`}
                             >
-                              {categoryStatus?.weeklyExceeded || categoryStatus?.monthlyExceeded
+                              {categoryStatus?.weeklyExceeded ||
+                              categoryStatus?.monthlyExceeded
                                 ? "Over Limit"
                                 : "Near Limit"}
                             </span>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2 text-sm text-base-content/60">
-                        <span>
-                          {new Date(expense.date).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </span>
-                        <span>•</span>
-                        <span className="badge badge-outline badge-sm">
-                          {expense.category}
-                        </span>
-                        <span>•</span>
-                        <span>Paid by {getMemberName(expense.paidByMemberId)}</span>
+                          <span>
+                            {new Date(expense.date).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              }
+                            )}
+                          </span>
+                          <span>•</span>
+                          <span className="badge badge-outline badge-sm">
+                            {expense.category}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Paid by {getMemberName(expense.paidByMemberId)}
+                          </span>
                         </div>
+                        {expense.comments && (
+                          <div className="mt-2 text-sm text-base-content/70 italic">
+                            💬 {expense.comments}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -343,10 +401,16 @@ export default function ExpensesPage() {
         onClose={() => setDeleteConfirm({ isOpen: false, expense: null })}
         onConfirm={() => {
           if (deleteConfirm.expense) {
-            deleteExpense(deleteConfirm.expense.id);
-            success(
-              `Expense "${deleteConfirm.expense.description}" deleted successfully`
-            );
+            try {
+              deleteExpense(deleteConfirm.expense.id);
+              success(
+                `Expense "${deleteConfirm.expense.description}" deleted successfully`
+              );
+            } catch (err) {
+              const errorMessage =
+                err instanceof Error ? err.message : "Failed to delete expense";
+              error(errorMessage);
+            }
           }
         }}
         title="Delete Expense"
@@ -356,4 +420,3 @@ export default function ExpensesPage() {
     </>
   );
 }
-

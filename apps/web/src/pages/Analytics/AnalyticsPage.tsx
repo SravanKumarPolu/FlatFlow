@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/common/PageHeader";
-import { Card } from "@flatflow/ui";
+import { EmptyState } from "../../components/common/EmptyState";
+import { Card, Button } from "@flatflow/ui";
 import { useExpenses, useBills, useBillPayments, useFlat } from "../../hooks";
 import {
   LineChart,
@@ -40,6 +42,7 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
 };
 
 export default function AnalyticsPage() {
+  const navigate = useNavigate();
   const { expenses } = useExpenses();
   const { bills, getBillsByFlatId } = useBills();
   const { payments: billPayments } = useBillPayments();
@@ -70,7 +73,11 @@ export default function AnalyticsPage() {
 
     for (let i = 5; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+      const monthStart = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        1
+      ).toISOString();
       const monthEnd = new Date(
         date.getFullYear(),
         date.getMonth() + 1,
@@ -87,7 +94,10 @@ export default function AnalyticsPage() {
       const total = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
       months.push({
-        month: date.toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+        month: date.toLocaleDateString("en-IN", {
+          month: "short",
+          year: "numeric",
+        }),
         amount: total,
       });
     }
@@ -151,7 +161,10 @@ export default function AnalyticsPage() {
       const total = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
       days.push({
-        date: date.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+        date: date.toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+        }),
         amount: total,
       });
     }
@@ -161,9 +174,13 @@ export default function AnalyticsPage() {
 
   // Calculate total spending (expenses + bill payments)
   const totalExpenses = flatExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const totalBillPayments = flatBillPayments.reduce((sum, p) => sum + p.amount, 0);
+  const totalBillPayments = flatBillPayments.reduce(
+    (sum, p) => sum + p.amount,
+    0
+  );
   const totalSpending = totalExpenses + totalBillPayments;
-  const averageMonthly = monthlySpending.reduce((sum, m) => sum + m.amount, 0) / 6;
+  const averageMonthly =
+    monthlySpending.reduce((sum, m) => sum + m.amount, 0) / 6;
 
   // Monthly bill payments (last 6 months)
   const monthlyBillPayments = useMemo(() => {
@@ -172,7 +189,11 @@ export default function AnalyticsPage() {
 
     for (let i = 5; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+      const monthStart = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        1
+      ).toISOString();
       const monthEnd = new Date(
         date.getFullYear(),
         date.getMonth() + 1,
@@ -189,7 +210,10 @@ export default function AnalyticsPage() {
       const total = monthPayments.reduce((sum, p) => sum + p.amount, 0);
 
       months.push({
-        month: date.toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+        month: date.toLocaleDateString("en-IN", {
+          month: "short",
+          year: "numeric",
+        }),
         amount: total,
       });
     }
@@ -207,12 +231,20 @@ export default function AnalyticsPage() {
       {flatExpenses.length === 0 ? (
         <div className="card bg-base-100 shadow-sm">
           <div className="card-body">
-            <div className="text-center py-8">
-              <p className="text-base-content/60">No expenses to analyze yet</p>
-              <p className="text-sm text-base-content/60 mt-2">
-                Add some expenses to see charts and insights
-              </p>
-            </div>
+            <EmptyState
+              icon={<span className="text-5xl">📊</span>}
+              title="No expenses to analyze yet"
+              description="Add some expenses to see charts, trends, and insights about your spending patterns."
+              action={
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => navigate("/expenses")}
+                >
+                  Go to Expenses
+                </Button>
+              }
+            />
           </div>
         </div>
       ) : (
@@ -253,7 +285,9 @@ export default function AnalyticsPage() {
                     maximumFractionDigits: 0,
                   }).format(totalExpenses)}
                 </p>
-                <p className="text-xs text-base-content/60">{flatExpenses.length} transactions</p>
+                <p className="text-xs text-base-content/60">
+                  {flatExpenses.length} transactions
+                </p>
               </div>
             </Card>
             <Card variant="bordered">
@@ -266,7 +300,9 @@ export default function AnalyticsPage() {
                     maximumFractionDigits: 0,
                   }).format(totalBillPayments)}
                 </p>
-                <p className="text-xs text-base-content/60">{flatBillPayments.length} payments</p>
+                <p className="text-xs text-base-content/60">
+                  {flatBillPayments.length} payments
+                </p>
               </div>
             </Card>
           </div>
@@ -305,8 +341,18 @@ export default function AnalyticsPage() {
                     }
                   />
                   <Legend />
-                  <Bar dataKey="expenses" fill="#3b82f6" name="Expenses" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="bills" fill="#10b981" name="Bills" radius={[8, 8, 0, 0]} />
+                  <Bar
+                    dataKey="expenses"
+                    fill="#3b82f6"
+                    name="Expenses"
+                    radius={[8, 8, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="bills"
+                    fill="#10b981"
+                    name="Bills"
+                    radius={[8, 8, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -350,7 +396,9 @@ export default function AnalyticsPage() {
           {/* Expense Trends Line Chart */}
           <Card variant="bordered">
             <div className="card-body">
-              <h2 className="card-title text-lg mb-4">Expense Trends (Last 30 Days)</h2>
+              <h2 className="card-title text-lg mb-4">
+                Expense Trends (Last 30 Days)
+              </h2>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={expenseTrends}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -390,4 +438,3 @@ export default function AnalyticsPage() {
     </>
   );
 }
-

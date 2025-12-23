@@ -5,6 +5,7 @@ import { Button, Input } from "@flatflow/ui";
 import { Member } from "@flatflow/core";
 import { useMembers, useFlat, useToast } from "../../hooks";
 import { memberFormSchema, type MemberFormData } from "../../lib/validation";
+import { logError } from "../../lib/logger";
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -21,13 +22,13 @@ export function AddMemberModal({
 }: AddMemberModalProps) {
   const { addMember, updateMember } = useMembers();
   const { getCurrentFlatId } = useFlat();
-  const { success } = useToast();
+  const { success, error } = useToast();
   const currentFlatId = flatId || getCurrentFlatId();
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     reset,
   } = useForm<MemberFormData>({
     resolver: zodResolver(memberFormSchema),
@@ -60,28 +61,42 @@ export function AddMemberModal({
     }
   }, [isOpen, member, reset]);
 
-  const onSubmit = (data: MemberFormData) => {
-    if (member) {
-      // Edit mode
-      updateMember(member.id, {
-        name: data.name,
-        emoji: data.emoji || undefined,
-        weight: data.weight,
-        isActive: data.isActive,
+  const onSubmit = async (data: MemberFormData) => {
+    try {
+      if (member) {
+        // Edit mode
+        updateMember(member.id, {
+          name: data.name,
+          emoji: data.emoji || undefined,
+          weight: data.weight,
+          isActive: data.isActive,
+        });
+        success(`Member "${data.name}" updated successfully`);
+      } else {
+        // Add mode
+        if (!currentFlatId) {
+          error("Please create a flat first");
+          return;
+        }
+        addMember({
+          flatId: currentFlatId,
+          name: data.name,
+          emoji: data.emoji || undefined,
+          weight: data.weight,
+          isActive: data.isActive,
+        });
+        success(`Member "${data.name}" added successfully`);
+      }
+      onClose();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to save member";
+      error(errorMessage);
+      logError(err, {
+        context: "AddMemberModal",
+        action: member ? "update" : "create",
       });
-      success(`Member "${data.name}" updated successfully`);
-    } else {
-      // Add mode
-      addMember({
-        flatId: currentFlatId,
-        name: data.name,
-        emoji: data.emoji || undefined,
-        weight: data.weight,
-        isActive: data.isActive,
-      });
-      success(`Member "${data.name}" added successfully`);
     }
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -128,7 +143,8 @@ export function AddMemberModal({
                 placeholder="1.0"
               />
               <p className="text-xs text-base-content/60">
-                Weight determines share (1.0 = normal, 1.5 = 50% more, 0.5 = 50% less)
+                Weight determines share (1.0 = normal, 1.5 = 50% more, 0.5 = 50%
+                less)
               </p>
 
               <div className="form-control">
@@ -144,10 +160,15 @@ export function AddMemberModal({
             </div>
 
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={onClose}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={isSubmitting}>
                 {member ? "Update" : "Add"} Member
               </Button>
             </div>

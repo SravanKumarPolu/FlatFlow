@@ -12,7 +12,7 @@ import { useMembers, useCurrentUser, useToast, useFlat } from "../../hooks";
 export default function MembersPage() {
   const { members, deleteMember } = useMembers();
   const { currentMemberId, setCurrentMemberId } = useCurrentUser();
-  const { success } = useToast();
+  const { success, error } = useToast();
   const { getCurrentFlatId } = useFlat();
   const currentFlatId = getCurrentFlatId();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,10 +33,13 @@ export default function MembersPage() {
       <PageHeader
         title="Members"
         actions={
-          <Button variant="primary" onClick={() => {
-            setEditingMember(null);
-            setIsModalOpen(true);
-          }}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingMember(null);
+              setIsModalOpen(true);
+            }}
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 mr-2"
@@ -131,8 +134,8 @@ export default function MembersPage() {
                               setIsModalOpen(true);
                             }}
                           >
-                          Edit
-                        </Button>
+                            Edit
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -167,8 +170,16 @@ export default function MembersPage() {
         onClose={() => setDeleteConfirm({ isOpen: false, member: null })}
         onConfirm={() => {
           if (deleteConfirm.member) {
-            deleteMember(deleteConfirm.member.id);
-            success(`Member "${deleteConfirm.member.name}" deleted successfully`);
+            try {
+              deleteMember(deleteConfirm.member.id);
+              success(
+                `Member "${deleteConfirm.member.name}" deleted successfully`
+              );
+            } catch (err) {
+              const errorMessage =
+                err instanceof Error ? err.message : "Failed to delete member";
+              error(errorMessage);
+            }
           }
         }}
         title="Delete Member"
@@ -178,4 +189,3 @@ export default function MembersPage() {
     </>
   );
 }
-
