@@ -144,3 +144,81 @@ export function getCurrentUserBalance(
   };
 }
 
+/**
+ * Simplified debt representation (A owes B ₹X)
+ * This simplifies the debt network to show minimal transactions
+ * Similar to Splitwise's debt simplification
+ */
+export interface SimplifiedDebt {
+  fromMemberId: string;
+  fromMemberName: string;
+  toMemberId: string;
+  toMemberName: string;
+  amount: number;
+}
+
+/**
+ * Simplify debts to show minimal transactions
+ * Uses a greedy algorithm to minimize the number of transactions
+ */
+export function simplifyDebts(memberBalances: MemberBalance[]): SimplifiedDebt[] {
+  // Filter to only members with non-zero net balances
+  const relevantBalances = memberBalances.filter(
+    (b) => Math.abs(b.netBalance) > 0.01
+  );
+
+  if (relevantBalances.length === 0) {
+    return [];
+  }
+
+  // Separate creditors (positive net balance) and debtors (negative net balance)
+  const creditors: MemberBalance[] = [];
+  const debtors: MemberBalance[] = [];
+
+  relevantBalances.forEach((balance) => {
+    if (balance.netBalance > 0.01) {
+      creditors.push(balance);
+    } else if (balance.netBalance < -0.01) {
+      debtors.push({ ...balance, netBalance: Math.abs(balance.netBalance) });
+    }
+  });
+
+  // Sort: creditors by amount (descending), debtors by amount (descending)
+  creditors.sort((a, b) => b.netBalance - a.netBalance);
+  debtors.sort((a, b) => b.netBalance - a.netBalance);
+
+  const simplifiedDebts: SimplifiedDebt[] = [];
+  let creditorIndex = 0;
+  let debtorIndex = 0;
+
+  // Greedy matching: match largest creditor with largest debtor
+  while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
+    const creditor = creditors[creditorIndex];
+    const debtor = debtors[debtorIndex];
+
+    const amount = Math.min(creditor.netBalance, debtor.netBalance);
+
+    simplifiedDebts.push({
+      fromMemberId: debtor.memberId,
+      fromMemberName: debtor.memberName,
+      toMemberId: creditor.memberId,
+      toMemberName: creditor.memberName,
+      amount: amount,
+    });
+
+    // Update remaining balances
+    creditor.netBalance -= amount;
+    debtor.netBalance -= amount;
+
+    // Move to next if balance is settled (within rounding tolerance)
+    if (creditor.netBalance < 0.01) {
+      creditorIndex++;
+    }
+    if (debtor.netBalance < 0.01) {
+      debtorIndex++;
+    }
+  }
+
+  return simplifiedDebts;
+}
+
